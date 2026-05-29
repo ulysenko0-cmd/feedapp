@@ -1251,6 +1251,40 @@ async function saveMN(){
 // ============================================================
 // EXCEL
 // ============================================================
+function makeFeedId(name){
+  const map={
+    'шрот соевый':'shrot_soy','соя экструдированная':'soya_extr','кукуруза':'kukuruza','мел':'mel','патока':'patoka','шрот рапсовый':'shrot_raps','пивная дробина':'piv_drobina','льняной жмых':'lnyanoy','соль':'sol','сода (бикарбонад натрия)':'soda','сода (бикарбонат натрия)':'soda','молоко':'moloko','зцм':'zcm','кетостоп':'ketostop','фунгистат':'fungistat','саф 100':'saf_100','милкацид':'milkacid','дайри вив':'dairy_viv','оксид магния':'oksid_magniya','агроктима анион':'agroktima_anion','нутристар лакт. европремикс':'nutristar_lakt','нутристар сухос. европремикс':'nutristar_suhos','кк стартер(богдан)':'kk_starter_bogdan'
+  };
+  const key=String(name||'').trim().toLowerCase();
+  if(map[key]) return map[key];
+  return 'f_'+key.replace(/[^а-яa-z0-9]/gi,'_').replace(/^_+|_+$/g,'').slice(0,32);
+}
+
+function parseExcelFeeds(rows){
+  let hdrRow=-1,colM=-1;
+  for(let r=0;r<rows.length;r++){
+    for(let c=0;c<(rows[r]||[]).length;c++){
+      const cell=String(rows[r][c]||'').toLowerCase();
+      if(cell.includes('итого за мес') || cell.includes('т/мес') || cell.includes('потребность')){hdrRow=r;colM=c;}
+    }
+    if(hdrRow>=0)break;
+  }
+  const startRow=hdrRow>=0?hdrRow+1:0;
+  const needCol=hdrRow>=0?colM:1;
+  const newFeeds=[];const seen=new Set();
+  for(let r=startRow;r<rows.length;r++){
+    const row=rows[r]||[];
+    const name=String(row[0]||'').trim();
+    if(!name||/^итого/i.test(name))continue;
+    const pm=parseFloat(String(row[needCol]||'').replace(',','.'));
+    if(!isNaN(pm)&&pm>0&&pm<5000){
+      const key=name.toLowerCase();
+      if(!seen.has(key)){seen.add(key);newFeeds.push({id:makeFeedId(name),name,per_month_t:Math.round(pm*1000)/1000});}
+    }
+  }
+  return newFeeds;
+}
+
 function loadXLS(file){
   if(!file)return;
   const msg=document.getElementById('xls-msg'),preview=document.getElementById('xls-preview');
@@ -1259,25 +1293,10 @@ function loadXLS(file){
   reader.onload=async e=>{
     try{
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
-      const sheetName=wb.SheetNames.find(n=>/2.?рац/i.test(n.replace(/[\s-]/g,'')));
-      if(!sheetName){msg.innerHTML=`<div class="alert alert-err">Лист "2-рац" не найден. Листы: ${wb.SheetNames.join(', ')}</div>`;return;}
+      const sheetName=wb.SheetNames.find(n=>/2.?рац/i.test(n.replace(/[\s-]/g,''))) || wb.SheetNames[0];
       const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:null});
-      let hdrRow=-1,colM=-1;
-      for(let r=0;r<rows.length;r++){
-        for(let c=0;c<rows[r].length;c++){
-          if(String(rows[r][c]||'').toLowerCase().includes('итого за мес')){hdrRow=r;colM=c;}
-        }
-        if(hdrRow>=0)break;
-      }
-      if(hdrRow<0){msg.innerHTML=`<div class="alert alert-err">Не найдена колонка "ИТОГО за мес тн"</div>`;return;}
-      const newFeeds=[];const seen=new Set();
-      for(let r=hdrRow+1;r<rows.length;r++){
-        const name=String(rows[r][0]||'').trim();
-        if(!name||/^итого/i.test(name))continue;
-        const pm=parseFloat(rows[r][colM]);
-        if(!isNaN(pm)&&pm>0&&pm<5000){const key=name.toLowerCase();if(!seen.has(key)){seen.add(key);newFeeds.push({name,per_month_t:Math.round(pm*1000)/1000});}}
-      }
-      if(!newFeeds.length){msg.innerHTML=`<div class="alert alert-err">Не найдено кормов</div>`;return;}
+      const newFeeds=parseExcelFeeds(rows);
+      if(!newFeeds.length){msg.innerHTML=`<div class="alert alert-err">Не найдено кормов. Нужны: название в колонке A, потребность в колонке B.</div>`;return;}
       let prev=`<div class="sec" style="margin-top:8px"><div class="sec-head"><span class="ico">🌾</span>Найдено ${newFeeds.length} кормов</div>
         <div style="padding:0"><table class="tbl"><thead><tr><th>Корм</th><th>т/мес</th></tr></thead><tbody>`;
       newFeeds.forEach(f=>{prev+=`<tr><td class="tname">${feedIco(f.name)} ${f.name}</td><td class="mono" style="color:var(--lime)">${fmt(f.per_month_t)}</td></tr>`;});
@@ -1294,19 +1313,22 @@ async function applyXLS(jsonStr){
   const msg=document.getElementById('xls-msg');
   msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> Сохранение...</div>`;
   try{
+    const activeIds=newFeeds.map(f=>f.id);
     for(let i=0;i<newFeeds.length;i++){
       const f=newFeeds[i];
-      const id='f_'+f.name.toLowerCase().replace(/[^а-яa-z0-9]/gi,'_').slice(0,18)+'_'+i;
-      await sbUpsert('feeds',{id,name:f.name,unit:'т',per_month_t:f.per_month_t,sort_order:i});
+      await sbUpsert('feeds',{id:f.id,name:f.name,unit:'т',per_month_t:f.per_month_t,sort_order:i+1,active:true});
+    }
+    for(const old of FEEDS){
+      if(!activeIds.includes(old.id)) await sbPatch('feeds',`id=eq.${old.id}`,{active:false});
     }
     FEEDS=await sbGet('feeds','order=sort_order');
     localStorage.setItem('feeds',JSON.stringify(FEEDS));
     document.getElementById('xls-preview').innerHTML='';
     msg.innerHTML=`<div class="alert alert-ok">✅ Применено ${newFeeds.length} кормов</div>`;
     toast('🌾 Корма обновлены');
+    renderSettings();
   }catch(e){msg.innerHTML=`<div class="alert alert-err">❌ Ошибка: ${e.message}</div>`;}
 }
-
 // ============================================================
 // FEED TOGGLE (вкл/выкл ингредиента)
 // ============================================================
