@@ -639,7 +639,7 @@ const TG_USERNAME = TG_USER && TG_USER.username ? TG_USER.username : '';
 const SUPABASE_URL = window.SUPABASE_URL || 'https://rukqmhrhxzmiwtbepxmz.supabase.co';
 const SUPABASE_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_y5vcLvwP6zO4AUXIAJp6ng_0arShMHX';
 
-const SITES = { 'Р РЈРЎ': 'Р–Рљ Р СѓСЃСЊ', 'Р РћРЎ': 'РљРѕРјРїР»РµРєСЃ Р РѕСЃСЃРёР№СЃРєРёР№' };
+const SITES = { 'РУС': 'ЖК Русь', 'РОС': 'Комплекс Российский' };
 const ROLES = { admin:'РђРґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂ', operator:'РћРїРµСЂР°С‚РѕСЂ', viewer:'РџСЂРѕСЃРјРѕС‚СЂ' };
 const ROLE_ICONS = { admin:'рџ‘‘', operator:'рџЊ±', viewer:'рџ‘Ѓ' };
 
@@ -710,7 +710,7 @@ const CUR_YEAR  = TODAY.getFullYear();
 const CUR_MONTH = TODAY.getMonth()+1;
 const CUR_DAY   = TODAY.getDate();
 
-let curSite = 'Р РЈРЎ';
+let curSite = 'РУС';
 let selDay  = CUR_DAY;
 let curPage = 'dash';
 let ME = null;
@@ -761,15 +761,15 @@ async function loadAll(){
       const hasOnlyBrowserUser = TG_ID > 0 && allUsers && allUsers.length === 1 && Number(allUsers[0].tg_id) === 0;
       const isFirst  = !allUsers || allUsers.length === 0 || hasOnlyBrowserUser;
       if (isFirst) {
-        await sbInsert('app_users', {tg_id:TG_ID, name:TG_NAME, username:TG_USERNAME, role:'admin', site:'Р РЈРЎ'});
-        users = [{tg_id:TG_ID, name:TG_NAME, username:TG_USERNAME, role:'admin', site:'Р РЈРЎ'}];
+        await sbInsert('app_users', {tg_id:TG_ID, name:TG_NAME, username:TG_USERNAME, role:'admin', site:'РУС'});
+        users = [{tg_id:TG_ID, name:TG_NAME, username:TG_USERNAME, role:'admin', site:'РУС'}];
       } else {
         showAccessDenied(); return;
       }
     }
     ME = users[0];
     if (!ME.role) { showAccessDenied(); return; }
-    if (ME.role==='operator') curSite = ME.site || 'Р РЈРЎ';
+    if (ME.role==='operator') curSite = ME.site || 'РУС';
 
     const [feeds, dayData, openBal, logs, monthlyNeeds] = await Promise.all([
       sbGet('feeds','order=sort_order'),
@@ -859,12 +859,12 @@ function render(){
 function siteToggleHtml(){
   const canSwitch = CAN.switchSite(ME && ME.role);
   return `<div class="site-toggle">
-    <button class="site-btn ${curSite==='Р РЈРЎ'?'on':''}" data-s="Р РЈРЎ" onclick="setSite('Р РЈРЎ')"
-      ${!canSwitch&&ME && ME.site!=='Р РЈРЎ'?'disabled':''}>
+    <button class="site-btn ${curSite==='РУС'?'on':''}" data-s="РУС" onclick="setSite('РУС')"
+      ${!canSwitch&&ME && ME.site!=='РУС'?'disabled':''}>
       рџЏ Р–Рљ Р СѓСЃСЊ<small>РџР»РѕС‰Р°РґРєР° Рђ</small>
     </button>
-    <button class="site-btn ${curSite==='Р РћРЎ'?'on':''}" data-s="Р РћРЎ" onclick="setSite('Р РћРЎ')"
-      ${!canSwitch&&ME && ME.site!=='Р РћРЎ'?'disabled':''}>
+    <button class="site-btn ${curSite==='РОС'?'on':''}" data-s="РОС" onclick="setSite('РОС')"
+      ${!canSwitch&&ME && ME.site!=='РОС'?'disabled':''}>
       рџЏ­ РљРѕРјРїР»РµРєСЃ Р РѕСЃ.<small>РџР»РѕС‰Р°РґРєР° Р‘</small>
     </button>
   </div>`;
