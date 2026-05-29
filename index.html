@@ -623,14 +623,15 @@ input[type=number] { font-variant-numeric: tabular-nums; }
 // ============================================================
 // TELEGRAM
 // ============================================================
-const tg = window.Telegram?.WebApp;
+const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
 if (tg) { tg.ready(); tg.expand(); if (tg.colorScheme==='light') document.body.classList.add('tg-light'); }
 
-const TG_ID   = tg?.initDataUnsafe?.user?.id   || 0;
-const TG_NAME = tg?.initDataUnsafe?.user
+const TG_USER = tg && tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user : null;
+const TG_ID   = TG_USER && TG_USER.id ? TG_USER.id : 0;
+const TG_NAME = TG_USER
   ? `${tg.initDataUnsafe.user.first_name}${tg.initDataUnsafe.user.last_name?' '+tg.initDataUnsafe.user.last_name:''}`
   : 'Пользователь';
-const TG_USERNAME = tg?.initDataUnsafe?.user?.username || '';
+const TG_USERNAME = TG_USER && TG_USER.username ? TG_USER.username : '';
 
 // ============================================================
 // CONFIG
@@ -724,7 +725,7 @@ function activeFeeds(){ return FEEDS.filter(f=>f.active!==false); }
 
 function getOpenBal(feedId){
   const r=OPEN_BAL.find(x=>x.feed_id===feedId&&x.site===curSite&&x.year===CUR_YEAR&&x.month===CUR_MONTH);
-  return r?.opening_balance||0;
+  return r && r.opening_balance ? r.opening_balance : 0;
 }
 function getDayRec(feedId,day){
   return DAY_DATA.find(x=>x.feed_id===feedId&&x.site===curSite&&x.year===CUR_YEAR&&x.month===CUR_MONTH&&x.day===day)||{intake:0,expense:0};
@@ -811,16 +812,16 @@ function showAccessDenied(){
 // ROLE UI
 // ============================================================
 function applyRoleUI(){
-  if (!CAN.intake(ME?.role))   { const b=document.getElementById('bni-intake');   if(b){b.disabled=true;b.style.display='none';} }
-  if (!CAN.settings(ME?.role)) { const b=document.getElementById('bni-settings'); if(b){b.disabled=true;b.style.display='none';} }
+  if (!CAN.intake(ME && ME.role))   { const b=document.getElementById('bni-intake');   if(b){b.disabled=true;b.style.display='none';} }
+  if (!CAN.settings(ME && ME.role)) { const b=document.getElementById('bni-settings'); if(b){b.disabled=true;b.style.display='none';} }
 }
 
 // ============================================================
 // NAVIGATION
 // ============================================================
 function goPage(page, el){
-  if (page==='intake'   && !CAN.intake(ME?.role))   { toast('🔒 Нет прав'); return; }
-  if (page==='settings' && !CAN.settings(ME?.role)) { toast('🔒 Только для администратора'); return; }
+  if (page==='intake'   && !CAN.intake(ME && ME.role))   { toast('🔒 Нет прав'); return; }
+  if (page==='settings' && !CAN.settings(ME && ME.role)) { toast('🔒 Только для администратора'); return; }
   curPage=page;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   document.getElementById('pg-'+page).classList.add('on');
@@ -830,7 +831,7 @@ function goPage(page, el){
 }
 
 function setSite(s){
-  if (!CAN.otherSite(ME?.role, ME?.site, s)) { toast('🔒 Нет доступа к этой площадке'); return; }
+  if (!CAN.otherSite(ME && ME.role, ME && ME.site, s)) { toast('🔒 Нет доступа к этой площадке'); return; }
   curSite=s;
   document.querySelectorAll('.site-btn').forEach(b=>b.classList.toggle('on',b.dataset.s===s));
   reloadDayData().then(render);
@@ -847,14 +848,14 @@ function render(){
 // SITE TOGGLE
 // ============================================================
 function siteToggleHtml(){
-  const canSwitch = CAN.switchSite(ME?.role);
+  const canSwitch = CAN.switchSite(ME && ME.role);
   return `<div class="site-toggle">
     <button class="site-btn ${curSite==='РУС'?'on':''}" data-s="РУС" onclick="setSite('РУС')"
-      ${!canSwitch&&ME?.site!=='РУС'?'disabled':''}>
+      ${!canSwitch&&ME && ME.site!=='РУС'?'disabled':''}>
       🏘 ЖК Русь<small>Площадка А</small>
     </button>
     <button class="site-btn ${curSite==='РОС'?'on':''}" data-s="РОС" onclick="setSite('РОС')"
-      ${!canSwitch&&ME?.site!=='РОС'?'disabled':''}>
+      ${!canSwitch&&ME && ME.site!=='РОС'?'disabled':''}>
       🏭 Комплекс Рос.<small>Площадка Б</small>
     </button>
   </div>`;
@@ -875,9 +876,9 @@ function renderDash(){
   const hero = `<div class="hero">
     <div class="hero-top">
       <div class="hero-title">🌾 Движение кормов</div>
-      <div class="hero-user">${roleBadge(ME?.role)}</div>
+      <div class="hero-user">${roleBadge(ME && ME.role)}</div>
     </div>
-    <div style="font-size:12px;color:var(--muted);font-weight:700">${ME?.name||TG_NAME} · ${siteName(curSite)}</div>
+    <div style="font-size:12px;color:var(--muted);font-weight:700">${ME && ME.name ? ME.name : TG_NAME} · ${siteName(curSite)}</div>
   </div>`;
 
   // Summary stats
@@ -978,7 +979,7 @@ function renderDash(){
 // INTAKE
 // ============================================================
 function renderIntake(){
-  if (!CAN.intake(ME?.role)) {
+  if (!CAN.intake(ME && ME.role)) {
     document.getElementById('pg-intake').innerHTML=`<div class="alert alert-err" style="margin-top:40px">🔒 Нет прав для внесения прихода</div>`;
     return;
   }
@@ -987,7 +988,7 @@ function renderIntake(){
   let dopts='';
   for(let d=1;d<=daysInMonth();d++) dopts+=`<option value="${d}" ${d===CUR_DAY?'selected':''}>${d}</option>`;
 
-  const toggleHtml = ME?.role==='operator'
+  const toggleHtml = ME && ME.role==='operator'
     ? `<div class="alert alert-info">📍 ${siteName(ME.site)}</div>`
     : siteToggleHtml();
 
@@ -1011,7 +1012,7 @@ function renderIntake(){
     <div class="sec">
       <div class="sec-head"><span class="ico">🚛</span>Внести приход</div>
       <div class="sec-body">
-        <div class="alert alert-info">👤 ${ME?.name||TG_NAME} &nbsp;·&nbsp; ${roleBadge(ME?.role)}</div>
+        <div class="alert alert-info">👤 ${ME && ME.name ? ME.name : TG_NAME} &nbsp;·&nbsp; ${roleBadge(ME && ME.role)}</div>
         <div class="form-group"><label>📅 Дата</label><select id="iDay">${dopts}</select></div>
         <div class="form-group"><label>🌾 Корм</label><select id="iFeed">${fopts}</select></div>
         <div class="form-group"><label>⚖️ Количество (т)</label>
@@ -1029,7 +1030,7 @@ function renderIntake(){
 }
 
 async function doIntake(){
-  if (!CAN.intake(ME?.role)) { toast('🔒 Нет прав'); return; }
+  if (!CAN.intake(ME && ME.role)) { toast('🔒 Нет прав'); return; }
   const day=parseInt(document.getElementById('iDay').value);
   const feedId=document.getElementById('iFeed').value;
   const amt=parseFloat(document.getElementById('iAmt').value);
@@ -1041,14 +1042,14 @@ async function doIntake(){
   try{
     const existing=getDayRec(feedId,day);
     await sbUpsert('day_records',{feed_id:feedId,site:curSite,year:CUR_YEAR,month:CUR_MONTH,day,intake:(existing.intake||0)+amt,expense:existing.expense||0});
-    await sbInsert('intake_log',{feed_id:feedId,feed_name:feed.name,site:curSite,year:CUR_YEAR,month:CUR_MONTH,day,user_name:ME?.name||TG_NAME,user_role:ME?.role,amount:amt,note});
+    await sbInsert('intake_log',{feed_id:feedId,feed_name:feed.name,site:curSite,year:CUR_YEAR,month:CUR_MONTH,day,user_name:ME && ME.name ? ME.name : TG_NAME,user_role:ME && ME.role,amount:amt,note});
     await reloadDayData();
     document.getElementById('iAmt').value='';
     document.getElementById('iNote').value='';
     msg.innerHTML=`<div class="alert alert-ok">✅ ${fmt(amt)} т · ${feed.name}</div>`;
     setTimeout(()=>{if(msg)msg.innerHTML='';},3000);
     toast('✅ Приход сохранён');
-    if(tg)tg.HapticFeedback?.notificationOccurred('success');
+    if(tg)tg.HapticFeedback && tg.HapticFeedback.notificationOccurred('success');
   }catch(e){msg.innerHTML=`<div class="alert alert-err">❌ Ошибка: ${e.message}</div>`;}
 }
 
@@ -1084,7 +1085,7 @@ function renderMonth(){
 // SETTINGS
 // ============================================================
 function renderSettings(){
-  if(!CAN.settings(ME?.role)){
+  if(!CAN.settings(ME && ME.role)){
     document.getElementById('pg-settings').innerHTML=`<div class="alert alert-err" style="margin-top:40px">🔒 Только для администратора</div>`;
     return;
   }
@@ -1222,7 +1223,7 @@ async function saveUserSite(tgId,site){
 // SAVE SETTINGS
 // ============================================================
 async function saveOB(){
-  const rows=FEEDS.map(f=>({feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,opening_balance:parseFloat(document.getElementById('ob_'+f.id)?.value)||0}));
+  const rows=FEEDS.map(f=>({feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,opening_balance:parseFloat((document.getElementById('ob_'+f.id) ? document.getElementById('ob_'+f.id).value : 0))||0}));
   try{
     await sbUpsert('opening_balances',rows);
     OPEN_BAL=await sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}`);
@@ -1235,7 +1236,7 @@ async function saveOB(){
 async function saveMN(){
   try{
     for(const f of FEEDS){
-      const val=parseFloat(document.getElementById('mn_'+f.id)?.value)||0;
+      const val=parseFloat((document.getElementById('mn_'+f.id) ? document.getElementById('mn_'+f.id).value : 0))||0;
       await sbUpsert('feeds',{id:f.id,per_month_t:val});
       f.per_month_t=val;
     }
@@ -1414,7 +1415,7 @@ async function doAdjust(feedId){
     await sbInsert('intake_log',{
       feed_id:feedId, feed_name:f.name, site:curSite,
       year:CUR_YEAR, month:CUR_MONTH, day:1,
-      user_name:ME?.name||TG_NAME, user_role:'admin',
+      user_name:ME && ME.name ? ME.name : TG_NAME, user_role:'admin',
       amount:newBal,
       note:`[КОРРЕКЦИЯ ОСТ.] ${note||'Ручная корректировка остатка на 1-е'}`
     });
@@ -1423,7 +1424,7 @@ async function doAdjust(feedId){
     msg.innerHTML=`<div class="alert alert-ok">✅ Остаток → ${fmt(newBal)} т</div>`;
     toast('✅ Остаток сохранён');
     setTimeout(()=>closeModal(), 1400);
-    if(tg) tg.HapticFeedback?.notificationOccurred('success');
+    if(tg) tg.HapticFeedback && tg.HapticFeedback.notificationOccurred('success');
   } catch(e){ msg.innerHTML=`<div class="alert alert-err">❌ ${e.message}</div>`; }
 }
 
