@@ -1,38 +1,38 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Движение кормов</title>
+<title>Р”РІРёР¶РµРЅРёРµ РєРѕСЂРјРѕРІ</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700;900&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
-   PALETTE — «Поле в цифре»
-   Золото пшеницы · Зелень луга · Чернозём · Рябина
+   PALETTE вЂ” В«РџРѕР»Рµ РІ С†РёС„СЂРµВ»
+   Р—РѕР»РѕС‚Рѕ РїС€РµРЅРёС†С‹ В· Р—РµР»РµРЅСЊ Р»СѓРіР° В· Р§РµСЂРЅРѕР·С‘Рј В· Р СЏР±РёРЅР°
    ============================================================ */
 :root {
-  /* Backgrounds — тёмная тема (основная) */
-  --bg:       #141a0e;   /* глубокий чернозём */
-  --s1:       #1c2414;   /* тёмная зелень почвы */
-  --s2:       #243019;   /* чуть светлее */
-  --s3:       #2f3d20;   /* граница */
+  /* Backgrounds вЂ” С‚С‘РјРЅР°СЏ С‚РµРјР° (РѕСЃРЅРѕРІРЅР°СЏ) */
+  --bg:       #141a0e;   /* РіР»СѓР±РѕРєРёР№ С‡РµСЂРЅРѕР·С‘Рј */
+  --s1:       #1c2414;   /* С‚С‘РјРЅР°СЏ Р·РµР»РµРЅСЊ РїРѕС‡РІС‹ */
+  --s2:       #243019;   /* С‡СѓС‚СЊ СЃРІРµС‚Р»РµРµ */
+  --s3:       #2f3d20;   /* РіСЂР°РЅРёС†Р° */
   --border:   #3a4e27;
 
-  /* Акценты */
-  --gold:     #f5c842;   /* пшеница */
-  --gold2:    #e8a020;   /* янтарь */
+  /* РђРєС†РµРЅС‚С‹ */
+  --gold:     #f5c842;   /* РїС€РµРЅРёС†Р° */
+  --gold2:    #e8a020;   /* СЏРЅС‚Р°СЂСЊ */
   --gold-d:   rgba(245,200,66,.15);
-  --lime:     #8fce3a;   /* молодая трава */
+  --lime:     #8fce3a;   /* РјРѕР»РѕРґР°СЏ С‚СЂР°РІР° */
   --lime-d:   rgba(143,206,58,.14);
-  --red:      #e8402a;   /* рябина */
+  --red:      #e8402a;   /* СЂСЏР±РёРЅР° */
   --red-d:    rgba(232,64,42,.14);
-  --sky:      #5bbfff;   /* небо */
+  --sky:      #5bbfff;   /* РЅРµР±Рѕ */
   --sky-d:    rgba(91,191,255,.13);
-  --cream:    #f0ead0;   /* солома */
+  --cream:    #f0ead0;   /* СЃРѕР»РѕРјР° */
 
-  /* Текст */
+  /* РўРµРєСЃС‚ */
   --text:     #e8edd6;
   --muted:    #7a8f5c;
   --muted2:   #526038;
@@ -134,7 +134,7 @@ body::before {
   border: 1px solid var(--border);
 }
 .hero::before {
-  content: '🌾';
+  content: 'рџЊѕ';
   position: absolute; right: -8px; top: -8px;
   font-size: 80px; opacity: .08;
   transform: rotate(15deg);
@@ -581,21 +581,21 @@ input[type=number] { font-variant-numeric: tabular-nums; }
 
 <!-- LOADER -->
 <div id="loader">
-  <div class="loader-grain">🌾</div>
-  <div class="loader-text">Загрузка данных...</div>
+  <div class="loader-grain">рџЊѕ</div>
+  <div class="loader-text">Р—Р°РіСЂСѓР·РєР° РґР°РЅРЅС‹С…...</div>
 </div>
 
 <!-- ACCESS DENIED -->
 <div id="access-denied">
-  <div style="font-size:56px">🔒</div>
-  <div style="font-family:var(--f-display);font-size:18px;font-weight:900;color:var(--gold)">Нет доступа</div>
-  <div style="color:var(--muted);font-size:14px;line-height:1.5">Вы не зарегистрированы.<br>Обратитесь к администратору.</div>
+  <div style="font-size:56px">рџ”’</div>
+  <div style="font-family:var(--f-display);font-size:18px;font-weight:900;color:var(--gold)">РќРµС‚ РґРѕСЃС‚СѓРїР°</div>
+  <div style="color:var(--muted);font-size:14px;line-height:1.5">Р’С‹ РЅРµ Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°РЅС‹.<br>РћР±СЂР°С‚РёС‚РµСЃСЊ Рє Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂСѓ.</div>
   <div id="ad-tgid" style="font-size:11px;color:var(--muted2);margin-top:4px;font-family:monospace"></div>
 </div>
 
 <div id="toast"></div>
 
-<!-- MODAL — добавить ингредиент / корректировка остатка -->
+<!-- MODAL вЂ” РґРѕР±Р°РІРёС‚СЊ РёРЅРіСЂРµРґРёРµРЅС‚ / РєРѕСЂСЂРµРєС‚РёСЂРѕРІРєР° РѕСЃС‚Р°С‚РєР° -->
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal" id="modal-body">
     <div class="modal-handle"></div>
@@ -613,10 +613,10 @@ input[type=number] { font-variant-numeric: tabular-nums; }
 
 <!-- BOTTOM NAV -->
 <nav class="bnav" id="bnav">
-  <button class="bni on" id="bni-dash"     onclick="goPage('dash',this)">    <span class="ico">📊</span>Остатки</button>
-  <button class="bni"    id="bni-intake"   onclick="goPage('intake',this)">  <span class="ico">🚛</span>Приход</button>
-  <button class="bni"    id="bni-month"    onclick="goPage('month',this)">   <span class="ico">📅</span>Журнал</button>
-  <button class="bni"    id="bni-settings" onclick="goPage('settings',this)"><span class="ico">⚙️</span>Настройки</button>
+  <button class="bni on" id="bni-dash"     onclick="goPage('dash',this)">    <span class="ico">рџ“Љ</span>РћСЃС‚Р°С‚РєРё</button>
+  <button class="bni"    id="bni-intake"   onclick="goPage('intake',this)">  <span class="ico">рџљ›</span>РџСЂРёС…РѕРґ</button>
+  <button class="bni"    id="bni-month"    onclick="goPage('month',this)">   <span class="ico">рџ“…</span>Р–СѓСЂРЅР°Р»</button>
+  <button class="bni"    id="bni-settings" onclick="goPage('settings',this)"><span class="ico">вљ™пёЏ</span>РќР°СЃС‚СЂРѕР№РєРё</button>
 </nav>
 
 <script>
@@ -630,7 +630,7 @@ const TG_USER = tg && tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataU
 const TG_ID   = TG_USER && TG_USER.id ? TG_USER.id : 0;
 const TG_NAME = TG_USER
   ? `${tg.initDataUnsafe.user.first_name}${tg.initDataUnsafe.user.last_name?' '+tg.initDataUnsafe.user.last_name:''}`
-  : 'Пользователь';
+  : 'РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ';
 const TG_USERNAME = TG_USER && TG_USER.username ? TG_USER.username : '';
 
 // ============================================================
@@ -639,16 +639,16 @@ const TG_USERNAME = TG_USER && TG_USER.username ? TG_USER.username : '';
 const SUPABASE_URL = window.SUPABASE_URL || 'https://rukqmhrhxzmiwtbepxmz.supabase.co';
 const SUPABASE_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_y5vcLvwP6zO4AUXIAJp6ng_0arShMHX';
 
-const SITES = { 'РУС': 'ЖК Русь', 'РОС': 'Комплекс Российский' };
-const ROLES = { admin:'Администратор', operator:'Оператор', viewer:'Просмотр' };
-const ROLE_ICONS = { admin:'👑', operator:'🌱', viewer:'👁' };
+const SITES = { 'Р РЈРЎ': 'Р–Рљ Р СѓСЃСЊ', 'Р РћРЎ': 'РљРѕРјРїР»РµРєСЃ Р РѕСЃСЃРёР№СЃРєРёР№' };
+const ROLES = { admin:'РђРґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂ', operator:'РћРїРµСЂР°С‚РѕСЂ', viewer:'РџСЂРѕСЃРјРѕС‚СЂ' };
+const ROLE_ICONS = { admin:'рџ‘‘', operator:'рџЊ±', viewer:'рџ‘Ѓ' };
 
-// Иконки для кормов
+// РРєРѕРЅРєРё РґР»СЏ РєРѕСЂРјРѕРІ
 const FEED_ICONS = {
-  default:'🌾', силос:'🌽', сенаж:'🌿', солома:'🪹',
-  дробина:'🍺', рапс:'🌼', соя:'🫘', кукуруза:'🌽',
-  патока:'🍯', жмых:'🥜', мел:'🪨', соль:'🧂',
-  сода:'⚗️', зерно:'🌾', зерносмесь:'🌾', пшеница:'🌾',
+  default:'рџЊѕ', СЃРёР»РѕСЃ:'рџЊЅ', СЃРµРЅР°Р¶:'рџЊї', СЃРѕР»РѕРјР°:'рџЄ№',
+  РґСЂРѕР±РёРЅР°:'рџЌє', СЂР°РїСЃ:'рџЊј', СЃРѕСЏ:'рџ«', РєСѓРєСѓСЂСѓР·Р°:'рџЊЅ',
+  РїР°С‚РѕРєР°:'рџЌЇ', Р¶РјС‹С…:'рџҐњ', РјРµР»:'рџЄЁ', СЃРѕР»СЊ:'рџ§‚',
+  СЃРѕРґР°:'вљ—пёЏ', Р·РµСЂРЅРѕ:'рџЊѕ', Р·РµСЂРЅРѕСЃРјРµСЃСЊ:'рџЊѕ', РїС€РµРЅРёС†Р°:'рџЊѕ',
 };
 function feedIco(name) {
   const n = name.toLowerCase();
@@ -710,18 +710,22 @@ const CUR_YEAR  = TODAY.getFullYear();
 const CUR_MONTH = TODAY.getMonth()+1;
 const CUR_DAY   = TODAY.getDate();
 
-let curSite = 'РУС';
+let curSite = 'Р РЈРЎ';
 let selDay  = CUR_DAY;
 let curPage = 'dash';
 let ME = null;
 
-let FEEDS=[], DAY_DATA=[], OPEN_BAL=[], LOGS=[], USERS=[];
+let FEEDS=[], DAY_DATA=[], OPEN_BAL=[], LOGS=[], USERS=[], MONTHLY_NEEDS=[];
 
 function daysInMonth(){ return new Date(CUR_YEAR,CUR_MONTH,0).getDate(); }
-function dailyNorm(f){ return (f.per_month_t||0)/daysInMonth(); }
+function monthlyNeed(f){
+  const r = MONTHLY_NEEDS.find(x=>x.feed_id===f.id&&x.site===curSite&&x.year===CUR_YEAR&&x.month===CUR_MONTH);
+  return r ? Number(r.per_month_t||0) : Number(f.per_month_t||0);
+}
+function dailyNorm(f){ return monthlyNeed(f)/daysInMonth(); }
 function siteName(k){ return SITES[k]||k; }
-// Only active feeds shown in dash/intake/month
-function activeFeeds(){ return FEEDS.filter(f=>f.active!==false); }
+// Only active feeds with current site monthly need shown in dash/intake/month
+function activeFeeds(){ return FEEDS.filter(f=>f.active!==false && monthlyNeed(f)>0); }
 
 function getOpenBal(feedId){
   const r=OPEN_BAL.find(x=>x.feed_id===feedId&&x.site===curSite&&x.year===CUR_YEAR&&x.month===CUR_MONTH);
@@ -757,23 +761,24 @@ async function loadAll(){
       const hasOnlyBrowserUser = TG_ID > 0 && allUsers && allUsers.length === 1 && Number(allUsers[0].tg_id) === 0;
       const isFirst  = !allUsers || allUsers.length === 0 || hasOnlyBrowserUser;
       if (isFirst) {
-        await sbInsert('app_users', {tg_id:TG_ID, name:TG_NAME, username:TG_USERNAME, role:'admin', site:'РУС'});
-        users = [{tg_id:TG_ID, name:TG_NAME, username:TG_USERNAME, role:'admin', site:'РУС'}];
+        await sbInsert('app_users', {tg_id:TG_ID, name:TG_NAME, username:TG_USERNAME, role:'admin', site:'Р РЈРЎ'});
+        users = [{tg_id:TG_ID, name:TG_NAME, username:TG_USERNAME, role:'admin', site:'Р РЈРЎ'}];
       } else {
         showAccessDenied(); return;
       }
     }
     ME = users[0];
     if (!ME.role) { showAccessDenied(); return; }
-    if (ME.role==='operator') curSite = ME.site || 'РУС';
+    if (ME.role==='operator') curSite = ME.site || 'Р РЈРЎ';
 
-    const [feeds, dayData, openBal, logs] = await Promise.all([
+    const [feeds, dayData, openBal, logs, monthlyNeeds] = await Promise.all([
       sbGet('feeds','order=sort_order'),
       sbGet('day_records',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
       sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}`),
-      sbGet('intake_log',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}&order=created_at.desc&limit=100`)
+      sbGet('intake_log',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}&order=created_at.desc&limit=100`),
+      sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`)
     ]);
-    FEEDS=feeds||[]; DAY_DATA=dayData||[]; OPEN_BAL=openBal||[]; LOGS=logs||[];
+    FEEDS=feeds||[]; DAY_DATA=dayData||[]; OPEN_BAL=openBal||[]; LOGS=logs||[]; MONTHLY_NEEDS=monthlyNeeds||[];
     if (ME.role==='admin') USERS = await sbGet('app_users','order=created_at');
 
     applyRoleUI();
@@ -784,12 +789,13 @@ async function loadAll(){
     DAY_DATA = JSON.parse(localStorage.getItem('day_data')||'[]');
     OPEN_BAL = JSON.parse(localStorage.getItem('open_bal')||'[]');
     LOGS     = JSON.parse(localStorage.getItem('logs')||'[]');
+    MONTHLY_NEEDS = JSON.parse(localStorage.getItem('monthly_needs')||'[]');
     ME       = JSON.parse(localStorage.getItem('me')||'null');
     if (!ME) { showAccessDenied(); return; }
     applyRoleUI();
     document.getElementById('loader').style.display='none';
     render();
-    toast('⚠️ Офлайн режим');
+    toast('вљ пёЏ РћС„Р»Р°Р№РЅ СЂРµР¶РёРј');
   }
   localStorage.setItem('me', JSON.stringify(ME));
 }
@@ -798,15 +804,17 @@ async function reloadDayData(){
   try {
     DAY_DATA = await sbGet('day_records',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`);
     LOGS     = await sbGet('intake_log',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}&order=created_at.desc&limit=100`);
+    MONTHLY_NEEDS = await sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`);
     localStorage.setItem('day_data',JSON.stringify(DAY_DATA));
     localStorage.setItem('logs',JSON.stringify(LOGS));
+    localStorage.setItem('monthly_needs',JSON.stringify(MONTHLY_NEEDS));
   } catch(e){}
 }
 
 function showAccessDenied(){
   document.getElementById('loader').style.display='none';
   document.getElementById('access-denied').classList.add('show');
-  document.getElementById('ad-tgid').textContent=`Ваш Telegram ID: ${TG_ID}`;
+  document.getElementById('ad-tgid').textContent=`Р’Р°С€ Telegram ID: ${TG_ID}`;
 }
 
 // ============================================================
@@ -821,8 +829,8 @@ function applyRoleUI(){
 // NAVIGATION
 // ============================================================
 function goPage(page, el){
-  if (page==='intake'   && !CAN.intake(ME && ME.role))   { toast('🔒 Нет прав'); return; }
-  if (page==='settings' && !CAN.settings(ME && ME.role)) { toast('🔒 Только для администратора'); return; }
+  if (page==='intake'   && !CAN.intake(ME && ME.role))   { toast('рџ”’ РќРµС‚ РїСЂР°РІ'); return; }
+  if (page==='settings' && !CAN.settings(ME && ME.role)) { toast('рџ”’ РўРѕР»СЊРєРѕ РґР»СЏ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°'); return; }
   curPage=page;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   document.getElementById('pg-'+page).classList.add('on');
@@ -832,7 +840,7 @@ function goPage(page, el){
 }
 
 function setSite(s){
-  if (!CAN.otherSite(ME && ME.role, ME && ME.site, s)) { toast('🔒 Нет доступа к этой площадке'); return; }
+  if (!CAN.otherSite(ME && ME.role, ME && ME.site, s)) { toast('рџ”’ РќРµС‚ РґРѕСЃС‚СѓРїР° Рє СЌС‚РѕР№ РїР»РѕС‰Р°РґРєРµ'); return; }
   curSite=s;
   document.querySelectorAll('.site-btn').forEach(b=>b.classList.toggle('on',b.dataset.s===s));
   reloadDayData().then(render);
@@ -851,13 +859,13 @@ function render(){
 function siteToggleHtml(){
   const canSwitch = CAN.switchSite(ME && ME.role);
   return `<div class="site-toggle">
-    <button class="site-btn ${curSite==='РУС'?'on':''}" data-s="РУС" onclick="setSite('РУС')"
-      ${!canSwitch&&ME && ME.site!=='РУС'?'disabled':''}>
-      🏘 ЖК Русь<small>Площадка А</small>
+    <button class="site-btn ${curSite==='Р РЈРЎ'?'on':''}" data-s="Р РЈРЎ" onclick="setSite('Р РЈРЎ')"
+      ${!canSwitch&&ME && ME.site!=='Р РЈРЎ'?'disabled':''}>
+      рџЏ Р–Рљ Р СѓСЃСЊ<small>РџР»РѕС‰Р°РґРєР° Рђ</small>
     </button>
-    <button class="site-btn ${curSite==='РОС'?'on':''}" data-s="РОС" onclick="setSite('РОС')"
-      ${!canSwitch&&ME && ME.site!=='РОС'?'disabled':''}>
-      🏭 Комплекс Рос.<small>Площадка Б</small>
+    <button class="site-btn ${curSite==='Р РћРЎ'?'on':''}" data-s="Р РћРЎ" onclick="setSite('Р РћРЎ')"
+      ${!canSwitch&&ME && ME.site!=='Р РћРЎ'?'disabled':''}>
+      рџЏ­ РљРѕРјРїР»РµРєСЃ Р РѕСЃ.<small>РџР»РѕС‰Р°РґРєР° Р‘</small>
     </button>
   </div>`;
 }
@@ -871,15 +879,15 @@ function roleBadge(role){
 // DASHBOARD
 // ============================================================
 function renderDash(){
-  const mnames=['','января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  const mnames=['','СЏРЅРІР°СЂСЏ','С„РµРІСЂР°Р»СЏ','РјР°СЂС‚Р°','Р°РїСЂРµР»СЏ','РјР°СЏ','РёСЋРЅСЏ','РёСЋР»СЏ','Р°РІРіСѓСЃС‚Р°','СЃРµРЅС‚СЏР±СЂСЏ','РѕРєС‚СЏР±СЂСЏ','РЅРѕСЏР±СЂСЏ','РґРµРєР°Р±СЂСЏ'];
 
   // Hero block
   const hero = `<div class="hero">
     <div class="hero-top">
-      <div class="hero-title">🌾 Движение кормов</div>
+      <div class="hero-title">рџЊѕ Р”РІРёР¶РµРЅРёРµ РєРѕСЂРјРѕРІ</div>
       <div class="hero-user">${roleBadge(ME && ME.role)}</div>
     </div>
-    <div style="font-size:12px;color:var(--muted);font-weight:700">${ME && ME.name ? ME.name : TG_NAME} · ${siteName(curSite)}</div>
+    <div style="font-size:12px;color:var(--muted);font-weight:700">${ME && ME.name ? ME.name : TG_NAME} В· ${siteName(curSite)}</div>
   </div>`;
 
   // Summary stats
@@ -894,15 +902,15 @@ function renderDash(){
   const statStrip=`<div class="stat-strip">
     <div class="stat-box">
       <div class="stat-box-val" style="color:var(--lime)">${fmt(totalIntakeToday)}</div>
-      <div class="stat-box-lbl">Приход т</div>
+      <div class="stat-box-lbl">РџСЂРёС…РѕРґ С‚</div>
     </div>
     <div class="stat-box">
       <div class="stat-box-val" style="color:var(--red)">${critFeeds}</div>
-      <div class="stat-box-lbl">Критично</div>
+      <div class="stat-box-lbl">РљСЂРёС‚РёС‡РЅРѕ</div>
     </div>
     <div class="stat-box">
       <div class="stat-box-val" style="color:var(--gold)">${warnFeeds}</div>
-      <div class="stat-box-lbl">Внимание</div>
+      <div class="stat-box-lbl">Р’РЅРёРјР°РЅРёРµ</div>
     </div>
   </div>`;
 
@@ -916,13 +924,13 @@ function renderDash(){
     return `<div class="fcard ${cls}">
       <span class="fcard-ico">${feedIco(f.name)}</span>
       <div class="fc-name">${f.name}</div>
-      <div class="fc-val">${fmt(balE)}<span class="fc-unit"> т</span></div>
+      <div class="fc-val">${fmt(balE)}<span class="fc-unit"> С‚</span></div>
       <div class="pbar"><div class="pbar-f ${cls}" style="width:${pct}%"></div></div>
       <div class="fc-sub">
-        <span style="color:var(--lime)">▲${fmt(rec.intake||0)}</span>
-        <span style="color:var(--red)">▼${fmt(exp)}</span>
+        <span style="color:var(--lime)">в–І${fmt(rec.intake||0)}</span>
+        <span style="color:var(--red)">в–ј${fmt(exp)}</span>
       </div>
-      ${dLeft<30?`<div class="days-left">⚠️ ${dLeft} дн.</div>`:''}
+      ${dLeft<30?`<div class="days-left">вљ пёЏ ${dLeft} РґРЅ.</div>`:''}
     </div>`;
   }).join('');
 
@@ -943,35 +951,35 @@ function renderDash(){
     <div class="log-item">
       <div class="log-ico">${feedIco(l.feed_name||'')}</div>
       <div class="log-left">
-        <div class="log-name">${l.feed_name||'—'}</div>
-        <div class="log-meta">${l.user_name}${l.note?` · ${l.note}`:''}</div>
+        <div class="log-name">${l.feed_name||'вЂ”'}</div>
+        <div class="log-meta">${l.user_name}${l.note?` В· ${l.note}`:''}</div>
       </div>
       <div style="text-align:right">
         <div class="log-amt">+${fmt(l.amount)}</div>
-        <div class="log-time">т · ${fmtTime(l.created_at)}</div>
+        <div class="log-time">С‚ В· ${fmtTime(l.created_at)}</div>
       </div>
     </div>`).join('')
-  :`<div style="text-align:center;color:var(--muted);padding:20px;font-size:13px">🌿 Нет операций за этот день</div>`;
+  :`<div style="text-align:center;color:var(--muted);padding:20px;font-size:13px">рџЊї РќРµС‚ РѕРїРµСЂР°С†РёР№ Р·Р° СЌС‚РѕС‚ РґРµРЅСЊ</div>`;
 
   document.getElementById('pg-dash').innerHTML=`
     ${hero}
     ${siteToggleHtml()}
     <div class="dnav">
-      <button class="dnavbtn" onclick="selDay=Math.max(1,selDay-1);render()">‹</button>
+      <button class="dnavbtn" onclick="selDay=Math.max(1,selDay-1);render()">вЂ№</button>
       <div class="dlabel">${selDay} ${mnames[CUR_MONTH]}</div>
-      <button class="dnavbtn" onclick="selDay=Math.min(daysInMonth(),selDay+1);render()">›</button>
+      <button class="dnavbtn" onclick="selDay=Math.min(daysInMonth(),selDay+1);render()">вЂє</button>
     </div>
     ${statStrip}
     <div class="cards-scroll">${cards}</div>
     <div class="sec">
-      <div class="sec-head"><span class="ico">📋</span>Сводка за день</div>
+      <div class="sec-head"><span class="ico">рџ“‹</span>РЎРІРѕРґРєР° Р·Р° РґРµРЅСЊ</div>
       <div style="padding:0">
-        <table class="tbl"><thead><tr><th>Корм</th><th>Приход</th><th>Расход</th><th>Остаток</th></tr></thead>
+        <table class="tbl"><thead><tr><th>РљРѕСЂРј</th><th>РџСЂРёС…РѕРґ</th><th>Р Р°СЃС…РѕРґ</th><th>РћСЃС‚Р°С‚РѕРє</th></tr></thead>
         <tbody>${trows}</tbody></table>
       </div>
     </div>
     <div class="sec">
-      <div class="sec-head"><span class="ico">📝</span>Операции дня</div>
+      <div class="sec-head"><span class="ico">рџ“ќ</span>РћРїРµСЂР°С†РёРё РґРЅСЏ</div>
       <div class="sec-body" style="padding:6px 15px">${logHtml}</div>
     </div>`;
 }
@@ -981,7 +989,7 @@ function renderDash(){
 // ============================================================
 function renderIntake(){
   if (!CAN.intake(ME && ME.role)) {
-    document.getElementById('pg-intake').innerHTML=`<div class="alert alert-err" style="margin-top:40px">🔒 Нет прав для внесения прихода</div>`;
+    document.getElementById('pg-intake').innerHTML=`<div class="alert alert-err" style="margin-top:40px">рџ”’ РќРµС‚ РїСЂР°РІ РґР»СЏ РІРЅРµСЃРµРЅРёСЏ РїСЂРёС…РѕРґР°</div>`;
     return;
   }
 
@@ -990,7 +998,7 @@ function renderIntake(){
   for(let d=1;d<=daysInMonth();d++) dopts+=`<option value="${d}" ${d===CUR_DAY?'selected':''}>${d}</option>`;
 
   const toggleHtml = ME && ME.role==='operator'
-    ? `<div class="alert alert-info">📍 ${siteName(ME.site)}</div>`
+    ? `<div class="alert alert-info">рџ“Ќ ${siteName(ME.site)}</div>`
     : siteToggleHtml();
 
   const recLogs=LOGS.slice(0,30);
@@ -998,48 +1006,48 @@ function renderIntake(){
     <div class="log-item">
       <div class="log-ico">${feedIco(l.feed_name||'')}</div>
       <div class="log-left">
-        <div class="log-name">${l.feed_name||'—'}</div>
-        <div class="log-meta">${l.day} · ${l.user_name}${l.note?` · ${l.note}`:''}</div>
+        <div class="log-name">${l.feed_name||'вЂ”'}</div>
+        <div class="log-meta">${l.day} В· ${l.user_name}${l.note?` В· ${l.note}`:''}</div>
       </div>
       <div style="text-align:right">
         <div class="log-amt">+${fmt(l.amount)}</div>
-        <div class="log-time">т · ${fmtTime(l.created_at)}</div>
+        <div class="log-time">С‚ В· ${fmtTime(l.created_at)}</div>
       </div>
     </div>`).join('')
-  :`<div style="text-align:center;color:var(--muted);padding:20px;font-size:13px">🌿 Нет приходов</div>`;
+  :`<div style="text-align:center;color:var(--muted);padding:20px;font-size:13px">рџЊї РќРµС‚ РїСЂРёС…РѕРґРѕРІ</div>`;
 
   document.getElementById('pg-intake').innerHTML=`
     ${toggleHtml}
     <div class="sec">
-      <div class="sec-head"><span class="ico">🚛</span>Внести приход</div>
+      <div class="sec-head"><span class="ico">рџљ›</span>Р’РЅРµСЃС‚Рё РїСЂРёС…РѕРґ</div>
       <div class="sec-body">
-        <div class="alert alert-info">👤 ${ME && ME.name ? ME.name : TG_NAME} &nbsp;·&nbsp; ${roleBadge(ME && ME.role)}</div>
-        <div class="form-group"><label>📅 Дата</label><select id="iDay">${dopts}</select></div>
-        <div class="form-group"><label>🌾 Корм</label><select id="iFeed">${fopts}</select></div>
-        <div class="form-group"><label>⚖️ Количество (т)</label>
+        <div class="alert alert-info">рџ‘¤ ${ME && ME.name ? ME.name : TG_NAME} &nbsp;В·&nbsp; ${roleBadge(ME && ME.role)}</div>
+        <div class="form-group"><label>рџ“… Р”Р°С‚Р°</label><select id="iDay">${dopts}</select></div>
+        <div class="form-group"><label>рџЊѕ РљРѕСЂРј</label><select id="iFeed">${fopts}</select></div>
+        <div class="form-group"><label>вљ–пёЏ РљРѕР»РёС‡РµСЃС‚РІРѕ (С‚)</label>
           <input type="number" id="iAmt" inputmode="decimal" placeholder="0.000" step="0.001" min="0"></div>
-        <div class="form-group"><label>📋 Примечание</label>
-          <input type="text" id="iNote" placeholder="Накладная, поставщик..."></div>
+        <div class="form-group"><label>рџ“‹ РџСЂРёРјРµС‡Р°РЅРёРµ</label>
+          <input type="text" id="iNote" placeholder="РќР°РєР»Р°РґРЅР°СЏ, РїРѕСЃС‚Р°РІС‰РёРє..."></div>
         <div id="intake-msg"></div>
-        <button class="btn btn-gold" onclick="doIntake()">🚛 Внести приход</button>
+        <button class="btn btn-gold" onclick="doIntake()">рџљ› Р’РЅРµСЃС‚Рё РїСЂРёС…РѕРґ</button>
       </div>
     </div>
     <div class="sec">
-      <div class="sec-head"><span class="ico">📜</span>История — ${CUR_MONTH} мес.</div>
+      <div class="sec-head"><span class="ico">рџ“њ</span>РСЃС‚РѕСЂРёСЏ вЂ” ${CUR_MONTH} РјРµСЃ.</div>
       <div class="sec-body" style="padding:6px 15px">${logHtml}</div>
     </div>`;
 }
 
 async function doIntake(){
-  if (!CAN.intake(ME && ME.role)) { toast('🔒 Нет прав'); return; }
+  if (!CAN.intake(ME && ME.role)) { toast('рџ”’ РќРµС‚ РїСЂР°РІ'); return; }
   const day=parseInt(document.getElementById('iDay').value);
   const feedId=document.getElementById('iFeed').value;
   const amt=parseFloat(document.getElementById('iAmt').value);
   const note=document.getElementById('iNote').value.trim();
   const msg=document.getElementById('intake-msg');
-  if(!amt||amt<=0){msg.innerHTML=`<div class="alert alert-err">⚠️ Введите количество</div>`;return;}
+  if(!amt||amt<=0){msg.innerHTML=`<div class="alert alert-err">вљ пёЏ Р’РІРµРґРёС‚Рµ РєРѕР»РёС‡РµСЃС‚РІРѕ</div>`;return;}
   const feed=FEEDS.find(f=>f.id===feedId);
-  msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> Сохранение...</div>`;
+  msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> РЎРѕС…СЂР°РЅРµРЅРёРµ...</div>`;
   try{
     const existing=getDayRec(feedId,day);
     await sbUpsert('day_records',{feed_id:feedId,site:curSite,year:CUR_YEAR,month:CUR_MONTH,day,intake:(existing.intake||0)+amt,expense:existing.expense||0});
@@ -1047,11 +1055,11 @@ async function doIntake(){
     await reloadDayData();
     document.getElementById('iAmt').value='';
     document.getElementById('iNote').value='';
-    msg.innerHTML=`<div class="alert alert-ok">✅ ${fmt(amt)} т · ${feed.name}</div>`;
+    msg.innerHTML=`<div class="alert alert-ok">вњ… ${fmt(amt)} С‚ В· ${feed.name}</div>`;
     setTimeout(()=>{if(msg)msg.innerHTML='';},3000);
-    toast('✅ Приход сохранён');
+    toast('вњ… РџСЂРёС…РѕРґ СЃРѕС…СЂР°РЅС‘РЅ');
     if(tg)tg.HapticFeedback && tg.HapticFeedback.notificationOccurred('success');
-  }catch(e){msg.innerHTML=`<div class="alert alert-err">❌ Ошибка: ${e.message}</div>`;}
+  }catch(e){msg.innerHTML=`<div class="alert alert-err">вќЊ РћС€РёР±РєР°: ${e.message}</div>`;}
 }
 
 // ============================================================
@@ -1059,15 +1067,15 @@ async function doIntake(){
 // ============================================================
 function renderMonth(){
   const dim=daysInMonth();
-  const mnames=['','Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-  let thead=`<tr><th>Корм</th>`;
+  const mnames=['','РЇРЅРІР°СЂСЊ','Р¤РµРІСЂР°Р»СЊ','РњР°СЂС‚','РђРїСЂРµР»СЊ','РњР°Р№','РСЋРЅСЊ','РСЋР»СЊ','РђРІРіСѓСЃС‚','РЎРµРЅС‚СЏР±СЂСЊ','РћРєС‚СЏР±СЂСЊ','РќРѕСЏР±СЂСЊ','Р”РµРєР°Р±СЂСЊ'];
+  let thead=`<tr><th>РљРѕСЂРј</th>`;
   for(let d=1;d<=dim;d++) thead+=`<th style="${d===CUR_DAY?'color:var(--gold)':''}">${d}</th>`;
   thead+='</tr>';
   let tbody=activeFeeds().map(f=>{
     let cells='';
     for(let d=1;d<=dim;d++){
       const rec=getDayRec(f.id,d),be=balEnd(f.id,d),isFut=d>CUR_DAY,hasIn=(rec.intake||0)>0;
-      cells+=`<td style="${isFut?'opacity:.3':''}${d===CUR_DAY?';background:rgba(245,200,66,.07)':''}" title="${fmt(be)} т">
+      cells+=`<td style="${isFut?'opacity:.3':''}${d===CUR_DAY?';background:rgba(245,200,66,.07)':''}" title="${fmt(be)} С‚">
         ${hasIn?`<span style="color:var(--lime);display:block;font-weight:800">${fmt(rec.intake||0)}</span>`:''}
         <span style="color:var(--muted);font-size:10px">${fmt(be)}</span></td>`;
     }
@@ -1077,7 +1085,7 @@ function renderMonth(){
   document.getElementById('pg-month').innerHTML=`
     ${siteToggleHtml()}
     <div class="sec">
-      <div class="sec-head"><span class="ico">📅</span>${mnames[CUR_MONTH]} ${CUR_YEAR} &nbsp;<span style="font-size:9px;color:var(--muted2)">🟢 приход · серый = остаток</span></div>
+      <div class="sec-head"><span class="ico">рџ“…</span>${mnames[CUR_MONTH]} ${CUR_YEAR} &nbsp;<span style="font-size:9px;color:var(--muted2)">рџџў РїСЂРёС…РѕРґ В· СЃРµСЂС‹Р№ = РѕСЃС‚Р°С‚РѕРє</span></div>
       <div class="month-wrap"><table class="tbl"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
     </div>`;
 }
@@ -1087,33 +1095,33 @@ function renderMonth(){
 // ============================================================
 function renderSettings(){
   if(!CAN.settings(ME && ME.role)){
-    document.getElementById('pg-settings').innerHTML=`<div class="alert alert-err" style="margin-top:40px">🔒 Только для администратора</div>`;
+    document.getElementById('pg-settings').innerHTML=`<div class="alert alert-err" style="margin-top:40px">рџ”’ РўРѕР»СЊРєРѕ РґР»СЏ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°</div>`;
     return;
   }
 
   // Users
   let usersHtml=USERS.map(u=>`
     <div class="user-row">
-      <div class="user-avatar">${ROLE_ICONS[u.role]||'🌱'}</div>
+      <div class="user-avatar">${ROLE_ICONS[u.role]||'рџЊ±'}</div>
       <div class="user-info">
         <div class="user-name">${u.name}</div>
-        <div class="user-meta">ID: ${u.tg_id}${u.username?' · @'+u.username:''}</div>
+        <div class="user-meta">ID: ${u.tg_id}${u.username?' В· @'+u.username:''}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end">
         <select class="role-select" onchange="saveUserRole(${u.tg_id},this.value)">
-          <option value="admin"    ${u.role==='admin'?'selected':''}>👑 Админ</option>
-          <option value="operator" ${u.role==='operator'?'selected':''}>🌱 Оператор</option>
-          <option value="viewer"   ${u.role==='viewer'?'selected':''}>👁 Просмотр</option>
-          <option value=""         ${!u.role?'selected':''}>🚫 Заблокирован</option>
+          <option value="admin"    ${u.role==='admin'?'selected':''}>рџ‘‘ РђРґРјРёРЅ</option>
+          <option value="operator" ${u.role==='operator'?'selected':''}>рџЊ± РћРїРµСЂР°С‚РѕСЂ</option>
+          <option value="viewer"   ${u.role==='viewer'?'selected':''}>рџ‘Ѓ РџСЂРѕСЃРјРѕС‚СЂ</option>
+          <option value=""         ${!u.role?'selected':''}>рџљ« Р—Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ</option>
         </select>
         ${u.role==='operator'?`
         <select class="role-select" onchange="saveUserSite(${u.tg_id},this.value)">
-          <option value="РУС" ${u.site==='РУС'?'selected':''}>🏘 ЖК Русь</option>
-          <option value="РОС" ${u.site==='РОС'?'selected':''}>🏭 Комплекс Рос.</option>
+          <option value="Р РЈРЎ" ${u.site==='Р РЈРЎ'?'selected':''}>рџЏ Р–Рљ Р СѓСЃСЊ</option>
+          <option value="Р РћРЎ" ${u.site==='Р РћРЎ'?'selected':''}>рџЏ­ РљРѕРјРїР»РµРєСЃ Р РѕСЃ.</option>
         </select>`:''}
       </div>
     </div>`).join('');
-  if(!USERS.length) usersHtml=`<div style="color:var(--muted);text-align:center;padding:16px">Нет пользователей</div>`;
+  if(!USERS.length) usersHtml=`<div style="color:var(--muted);text-align:center;padding:16px">РќРµС‚ РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№</div>`;
 
   // Feed toggles (active/inactive)
   let feedToggles = FEEDS.map(f=>`
@@ -1121,7 +1129,7 @@ function renderSettings(){
       <span class="toggle-ico">${feedIco(f.name)}</span>
       <div class="toggle-info">
         <div class="toggle-name" style="${f.active===false?'color:var(--muted);text-decoration:line-through':''}">${f.name}</div>
-        <div class="toggle-sub">${fmt(f.per_month_t||0)} т/мес · ${f.active===false?'<span style="color:var(--red)">выключен</span>':'<span style="color:var(--lime)">активен</span>'}</div>
+        <div class="toggle-sub">${fmt(f.per_month_t||0)} С‚/РјРµСЃ В· ${f.active===false?'<span style="color:var(--red)">РІС‹РєР»СЋС‡РµРЅ</span>':'<span style="color:var(--lime)">Р°РєС‚РёРІРµРЅ</span>'}</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <label class="tgl">
@@ -1131,66 +1139,66 @@ function renderSettings(){
       </div>
     </div>`).join('');
 
-  // Opening balances — only active feeds, with adjust button
+  // Opening balances вЂ” only active feeds, with adjust button
   let obRows=activeFeeds().map(f=>`
     <div class="form-group">
       <label style="display:flex;align-items:center;justify-content:space-between">
         <span>${feedIco(f.name)} ${f.name}</span>
-        <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px;width:auto" onclick="showAdjustModal('${f.id}')">✏️ Исправить</button>
+        <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px;width:auto" onclick="showAdjustModal('${f.id}')">вњЏпёЏ РСЃРїСЂР°РІРёС‚СЊ</button>
       </label>
       <input type="number" id="ob_${f.id}" value="${getOpenBal(f.id)}" min="0" step="0.01" inputmode="decimal">
     </div>`).join('');
 
-  // Monthly needs — only active feeds
+  // Monthly needs вЂ” only active feeds
   let mnRows=activeFeeds().map(f=>`
     <div class="form-group">
       <label>${feedIco(f.name)} ${f.name}</label>
-      <input type="number" id="mn_${f.id}" value="${f.per_month_t||0}" min="0" step="0.001" inputmode="decimal">
+      <input type="number" id="mn_${f.id}" value="${monthlyNeed(f)}" min="0" step="0.001" inputmode="decimal">
     </div>`).join('');
 
   document.getElementById('pg-settings').innerHTML=`
     ${siteToggleHtml()}
 
     <div class="sec">
-      <div class="sec-head"><span class="ico">👥</span>Пользователи и роли</div>
+      <div class="sec-head"><span class="ico">рџ‘Ґ</span>РџРѕР»СЊР·РѕРІР°С‚РµР»Рё Рё СЂРѕР»Рё</div>
       <div class="sec-body" style="padding:8px 15px">
-        <div class="alert alert-info" style="font-size:12px">Новые пользователи появляются после первого входа. Назначьте им роль.</div>
+        <div class="alert alert-info" style="font-size:12px">РќРѕРІС‹Рµ РїРѕР»СЊР·РѕРІР°С‚РµР»Рё РїРѕСЏРІР»СЏСЋС‚СЃСЏ РїРѕСЃР»Рµ РїРµСЂРІРѕРіРѕ РІС…РѕРґР°. РќР°Р·РЅР°С‡СЊС‚Рµ РёРј СЂРѕР»СЊ.</div>
         ${usersHtml}
       </div>
     </div>
 
     <div class="sec">
       <div class="sec-head" style="justify-content:space-between">
-        <span><span class="ico">🌾</span>Ингредиенты рациона</span>
-        <button class="btn btn-ghost btn-sm" onclick="showAddFeedModal()">+ Добавить</button>
+        <span><span class="ico">рџЊѕ</span>РРЅРіСЂРµРґРёРµРЅС‚С‹ СЂР°С†РёРѕРЅР°</span>
+        <button class="btn btn-ghost btn-sm" onclick="showAddFeedModal()">+ Р”РѕР±Р°РІРёС‚СЊ</button>
       </div>
       <div class="sec-body" style="padding:6px 15px">
-        <div class="alert alert-info" style="font-size:11px">Переключатель вкл/выкл скрывает ингредиент из всех экранов. Кнопка «Коррект.» — ручная правка остатка на любой день.</div>
+        <div class="alert alert-info" style="font-size:11px">РџРµСЂРµРєР»СЋС‡Р°С‚РµР»СЊ РІРєР»/РІС‹РєР» СЃРєСЂС‹РІР°РµС‚ РёРЅРіСЂРµРґРёРµРЅС‚ РёР· РІСЃРµС… СЌРєСЂР°РЅРѕРІ. РљРЅРѕРїРєР° В«РљРѕСЂСЂРµРєС‚.В» вЂ” СЂСѓС‡РЅР°СЏ РїСЂР°РІРєР° РѕСЃС‚Р°С‚РєР° РЅР° Р»СЋР±РѕР№ РґРµРЅСЊ.</div>
         ${feedToggles}
       </div>
     </div>
 
     <div class="sec">
-      <div class="sec-head"><span class="ico">📦</span>Остатки на 1-е число — ${siteName(curSite)}</div>
+      <div class="sec-head"><span class="ico">рџ“¦</span>РћСЃС‚Р°С‚РєРё РЅР° 1-Рµ С‡РёСЃР»Рѕ вЂ” ${siteName(curSite)}</div>
       <div class="sec-body">${obRows}<div id="ob-msg"></div>
-        <button class="btn btn-gold" onclick="saveOB()">💾 Сохранить остатки</button>
+        <button class="btn btn-gold" onclick="saveOB()">рџ’ѕ РЎРѕС…СЂР°РЅРёС‚СЊ РѕСЃС‚Р°С‚РєРё</button>
       </div>
     </div>
 
     <div class="sec">
-      <div class="sec-head"><span class="ico">📊</span>Потребность на месяц (т)</div>
+      <div class="sec-head"><span class="ico">рџ“Љ</span>РџРѕС‚СЂРµР±РЅРѕСЃС‚СЊ РЅР° РјРµСЃСЏС† (С‚)</div>
       <div class="sec-body">${mnRows}<div id="mn-msg"></div>
-        <button class="btn btn-lime" onclick="saveMN()">💾 Сохранить потребности</button>
+        <button class="btn btn-lime" onclick="saveMN()">рџ’ѕ РЎРѕС…СЂР°РЅРёС‚СЊ РїРѕС‚СЂРµР±РЅРѕСЃС‚Рё</button>
       </div>
     </div>
 
     <div class="sec">
-      <div class="sec-head"><span class="ico">📂</span>Загрузить из Excel</div>
+      <div class="sec-head"><span class="ico">рџ“‚</span>Р—Р°РіСЂСѓР·РёС‚СЊ РёР· Excel</div>
       <div class="sec-body">
-        <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Файл .xls/.xlsx, лист <b style="color:var(--cream)">2-рац</b></p>
+        <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Р¤Р°Р№Р» .xls/.xlsx, Р»РёСЃС‚ <b style="color:var(--cream)">2-СЂР°С†</b></p>
         <div class="upload-box" onclick="document.getElementById('xlsIn').click()">
-          <div style="font-size:36px;margin-bottom:8px">🌾</div>
-          <div style="font-weight:800;color:var(--cream)">Выбрать файл Excel</div>
+          <div style="font-size:36px;margin-bottom:8px">рџЊѕ</div>
+          <div style="font-weight:800;color:var(--cream)">Р’С‹Р±СЂР°С‚СЊ С„Р°Р№Р» Excel</div>
           <div style="color:var(--muted);font-size:12px;margin-top:4px">.xls, .xlsx</div>
           <input type="file" id="xlsIn" accept=".xls,.xlsx" style="display:none" onchange="loadXLS(this.files[0])">
         </div>
@@ -1207,17 +1215,17 @@ async function saveUserRole(tgId,role){
   try{
     await sbPatch('app_users',`tg_id=eq.${tgId}`,{role});
     USERS=await sbGet('app_users','order=created_at');
-    toast('✅ Роль обновлена');
+    toast('вњ… Р РѕР»СЊ РѕР±РЅРѕРІР»РµРЅР°');
     renderSettings();
-  }catch(e){toast('❌ '+e.message);}
+  }catch(e){toast('вќЊ '+e.message);}
 }
 async function saveUserSite(tgId,site){
   try{
     await sbPatch('app_users',`tg_id=eq.${tgId}`,{site});
     const u=USERS.find(x=>x.tg_id===tgId);
     if(u)u.site=site;
-    toast(`✅ Площадка: ${siteName(site)}`);
-  }catch(e){toast('❌ '+e.message);}
+    toast(`вњ… РџР»РѕС‰Р°РґРєР°: ${siteName(site)}`);
+  }catch(e){toast('вќЊ '+e.message);}
 }
 
 // ============================================================
@@ -1229,23 +1237,25 @@ async function saveOB(){
     await sbUpsert('opening_balances',rows);
     OPEN_BAL=await sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}`);
     localStorage.setItem('open_bal',JSON.stringify(OPEN_BAL));
-    toast('✅ Остатки сохранены');
+    toast('вњ… РћСЃС‚Р°С‚РєРё СЃРѕС…СЂР°РЅРµРЅС‹');
     const m=document.getElementById('ob-msg');
-    if(m){m.innerHTML=`<div class="alert alert-ok" style="margin-top:8px">✅ Сохранено</div>`;setTimeout(()=>m.innerHTML='',2000);}
-  }catch(e){toast('❌ '+e.message);}
+    if(m){m.innerHTML=`<div class="alert alert-ok" style="margin-top:8px">вњ… РЎРѕС…СЂР°РЅРµРЅРѕ</div>`;setTimeout(()=>m.innerHTML='',2000);}
+  }catch(e){toast('вќЊ '+e.message);}
 }
 async function saveMN(){
   try{
-    for(const f of FEEDS){
+    for(const f of activeFeeds()){
       const val=parseFloat((document.getElementById('mn_'+f.id) ? document.getElementById('mn_'+f.id).value : 0))||0;
-      await sbUpsert('feeds',{id:f.id,per_month_t:val});
-      f.per_month_t=val;
+      await sbUpsert('monthly_needs',{feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:val});
+      const r=MONTHLY_NEEDS.find(x=>x.feed_id===f.id);
+      if(r) r.per_month_t=val;
+      else MONTHLY_NEEDS.push({feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:val});
     }
-    localStorage.setItem('feeds',JSON.stringify(FEEDS));
-    toast('✅ Потребности сохранены');
+    localStorage.setItem('monthly_needs',JSON.stringify(MONTHLY_NEEDS));
+    toast('вњ… РџРѕС‚СЂРµР±РЅРѕСЃС‚Рё СЃРѕС…СЂР°РЅРµРЅС‹');
     const m=document.getElementById('mn-msg');
-    if(m){m.innerHTML=`<div class="alert alert-ok" style="margin-top:8px">✅ Сохранено</div>`;setTimeout(()=>m.innerHTML='',2000);}
-  }catch(e){toast('❌ '+e.message);}
+    if(m){m.innerHTML=`<div class="alert alert-ok" style="margin-top:8px">вњ… РЎРѕС…СЂР°РЅРµРЅРѕ</div>`;setTimeout(()=>m.innerHTML='',2000);}
+  }catch(e){toast('вќЊ '+e.message);}
 }
 
 // ============================================================
@@ -1253,11 +1263,11 @@ async function saveMN(){
 // ============================================================
 function makeFeedId(name){
   const map={
-    'шрот соевый':'shrot_soy','соя экструдированная':'soya_extr','кукуруза':'kukuruza','мел':'mel','патока':'patoka','шрот рапсовый':'shrot_raps','пивная дробина':'piv_drobina','льняной жмых':'lnyanoy','соль':'sol','сода (бикарбонад натрия)':'soda','сода (бикарбонат натрия)':'soda','молоко':'moloko','зцм':'zcm','кетостоп':'ketostop','фунгистат':'fungistat','саф 100':'saf_100','милкацид':'milkacid','дайри вив':'dairy_viv','оксид магния':'oksid_magniya','агроктима анион':'agroktima_anion','нутристар лакт. европремикс':'nutristar_lakt','нутристар сухос. европремикс':'nutristar_suhos','кк стартер(богдан)':'kk_starter_bogdan'
+    'С€СЂРѕС‚ СЃРѕРµРІС‹Р№':'shrot_soy','СЃРѕСЏ СЌРєСЃС‚СЂСѓРґРёСЂРѕРІР°РЅРЅР°СЏ':'soya_extr','РєСѓРєСѓСЂСѓР·Р°':'kukuruza','РјРµР»':'mel','РїР°С‚РѕРєР°':'patoka','С€СЂРѕС‚ СЂР°РїСЃРѕРІС‹Р№':'shrot_raps','РїРёРІРЅР°СЏ РґСЂРѕР±РёРЅР°':'piv_drobina','Р»СЊРЅСЏРЅРѕР№ Р¶РјС‹С…':'lnyanoy','СЃРѕР»СЊ':'sol','СЃРѕРґР° (Р±РёРєР°СЂР±РѕРЅР°Рґ РЅР°С‚СЂРёСЏ)':'soda','СЃРѕРґР° (Р±РёРєР°СЂР±РѕРЅР°С‚ РЅР°С‚СЂРёСЏ)':'soda','РјРѕР»РѕРєРѕ':'moloko','Р·С†Рј':'zcm','РєРµС‚РѕСЃС‚РѕРї':'ketostop','С„СѓРЅРіРёСЃС‚Р°С‚':'fungistat','СЃР°С„ 100':'saf_100','РјРёР»РєР°С†РёРґ':'milkacid','РґР°Р№СЂРё РІРёРІ':'dairy_viv','РѕРєСЃРёРґ РјР°РіРЅРёСЏ':'oksid_magniya','Р°РіСЂРѕРєС‚РёРјР° Р°РЅРёРѕРЅ':'agroktima_anion','РЅСѓС‚СЂРёСЃС‚Р°СЂ Р»Р°РєС‚. РµРІСЂРѕРїСЂРµРјРёРєСЃ':'nutristar_lakt','РЅСѓС‚СЂРёСЃС‚Р°СЂ СЃСѓС…РѕСЃ. РµРІСЂРѕРїСЂРµРјРёРєСЃ':'nutristar_suhos','РєРє СЃС‚Р°СЂС‚РµСЂ(Р±РѕРіРґР°РЅ)':'kk_starter_bogdan'
   };
   const key=String(name||'').trim().toLowerCase();
   if(map[key]) return map[key];
-  return 'f_'+key.replace(/[^а-яa-z0-9]/gi,'_').replace(/^_+|_+$/g,'').slice(0,32);
+  return 'f_'+key.replace(/[^Р°-СЏa-z0-9]/gi,'_').replace(/^_+|_+$/g,'').slice(0,32);
 }
 
 function parseExcelFeeds(rows){
@@ -1265,7 +1275,7 @@ function parseExcelFeeds(rows){
   for(let r=0;r<rows.length;r++){
     for(let c=0;c<(rows[r]||[]).length;c++){
       const cell=String(rows[r][c]||'').toLowerCase();
-      if(cell.includes('итого за мес') || cell.includes('т/мес') || cell.includes('потребность')){hdrRow=r;colM=c;}
+      if(cell.includes('РёС‚РѕРіРѕ Р·Р° РјРµСЃ') || cell.includes('С‚/РјРµСЃ') || cell.includes('РїРѕС‚СЂРµР±РЅРѕСЃС‚СЊ')){hdrRow=r;colM=c;}
     }
     if(hdrRow>=0)break;
   }
@@ -1275,7 +1285,7 @@ function parseExcelFeeds(rows){
   for(let r=startRow;r<rows.length;r++){
     const row=rows[r]||[];
     const name=String(row[0]||'').trim();
-    if(!name||/^итого/i.test(name))continue;
+    if(!name||/^РёС‚РѕРіРѕ/i.test(name))continue;
     const pm=parseFloat(String(row[needCol]||'').replace(',','.'));
     if(!isNaN(pm)&&pm>0&&pm<5000){
       const key=name.toLowerCase();
@@ -1288,22 +1298,22 @@ function parseExcelFeeds(rows){
 function loadXLS(file){
   if(!file)return;
   const msg=document.getElementById('xls-msg'),preview=document.getElementById('xls-preview');
-  msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> Читаем файл...</div>`;
+  msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> Р§РёС‚Р°РµРј С„Р°Р№Р»...</div>`;
   const reader=new FileReader();
   reader.onload=async e=>{
     try{
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
-      const sheetName=wb.SheetNames.find(n=>/2.?рац/i.test(n.replace(/[\s-]/g,''))) || wb.SheetNames[0];
+      const sheetName=wb.SheetNames.find(n=>/2.?СЂР°С†/i.test(n.replace(/[\s-]/g,''))) || wb.SheetNames[0];
       const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:null});
       const newFeeds=parseExcelFeeds(rows);
-      if(!newFeeds.length){msg.innerHTML=`<div class="alert alert-err">Не найдено кормов. Нужны: название в колонке A, потребность в колонке B.</div>`;return;}
-      let prev=`<div class="sec" style="margin-top:8px"><div class="sec-head"><span class="ico">🌾</span>Найдено ${newFeeds.length} кормов</div>
-        <div style="padding:0"><table class="tbl"><thead><tr><th>Корм</th><th>т/мес</th></tr></thead><tbody>`;
+      if(!newFeeds.length){msg.innerHTML=`<div class="alert alert-err">РќРµ РЅР°Р№РґРµРЅРѕ РєРѕСЂРјРѕРІ. РќСѓР¶РЅС‹: РЅР°Р·РІР°РЅРёРµ РІ РєРѕР»РѕРЅРєРµ A, РїРѕС‚СЂРµР±РЅРѕСЃС‚СЊ РІ РєРѕР»РѕРЅРєРµ B.</div>`;return;}
+      let prev=`<div class="sec" style="margin-top:8px"><div class="sec-head"><span class="ico">рџЊѕ</span>РќР°Р№РґРµРЅРѕ ${newFeeds.length} РєРѕСЂРјРѕРІ</div>
+        <div style="padding:0"><table class="tbl"><thead><tr><th>РљРѕСЂРј</th><th>С‚/РјРµСЃ</th></tr></thead><tbody>`;
       newFeeds.forEach(f=>{prev+=`<tr><td class="tname">${feedIco(f.name)} ${f.name}</td><td class="mono" style="color:var(--lime)">${fmt(f.per_month_t)}</td></tr>`;});
-      prev+=`</tbody></table></div><div style="padding:12px"><button class="btn btn-gold" onclick='applyXLS(${JSON.stringify(JSON.stringify(newFeeds))})'>✅ Применить</button></div></div>`;
+      prev+=`</tbody></table></div><div style="padding:12px"><button class="btn btn-gold" onclick='applyXLS(${JSON.stringify(JSON.stringify(newFeeds))})'>вњ… РџСЂРёРјРµРЅРёС‚СЊ</button></div></div>`;
       preview.innerHTML=prev;
-      msg.innerHTML=`<div class="alert alert-ok">🌾 Проверьте и нажмите Применить</div>`;
-    }catch(err){msg.innerHTML=`<div class="alert alert-err">❌ Ошибка: ${err.message}</div>`;}
+      msg.innerHTML=`<div class="alert alert-ok">рџЊѕ РџСЂРѕРІРµСЂСЊС‚Рµ Рё РЅР°Р¶РјРёС‚Рµ РџСЂРёРјРµРЅРёС‚СЊ</div>`;
+    }catch(err){msg.innerHTML=`<div class="alert alert-err">вќЊ РћС€РёР±РєР°: ${err.message}</div>`;}
   };
   reader.readAsArrayBuffer(file);
 }
@@ -1311,26 +1321,29 @@ function loadXLS(file){
 async function applyXLS(jsonStr){
   const newFeeds=JSON.parse(jsonStr);
   const msg=document.getElementById('xls-msg');
-  msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> Сохранение...</div>`;
+  msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> РЎРѕС…СЂР°РЅРµРЅРёРµ...</div>`;
   try{
     const activeIds=newFeeds.map(f=>f.id);
     for(let i=0;i<newFeeds.length;i++){
       const f=newFeeds[i];
-      await sbUpsert('feeds',{id:f.id,name:f.name,unit:'т',per_month_t:f.per_month_t,sort_order:i+1,active:true});
+      await sbUpsert('feeds',{id:f.id,name:f.name,unit:'С‚',per_month_t:f.per_month_t,sort_order:i+1,active:true});
+      await sbUpsert('monthly_needs',{feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:f.per_month_t});
     }
     for(const old of FEEDS){
-      if(!activeIds.includes(old.id)) await sbPatch('feeds',`id=eq.${old.id}`,{active:false});
+      if(!activeIds.includes(old.id)) await sbUpsert('monthly_needs',{feed_id:old.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:0});
     }
     FEEDS=await sbGet('feeds','order=sort_order');
+    MONTHLY_NEEDS=await sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`);
     localStorage.setItem('feeds',JSON.stringify(FEEDS));
+    localStorage.setItem('monthly_needs',JSON.stringify(MONTHLY_NEEDS));
     document.getElementById('xls-preview').innerHTML='';
-    msg.innerHTML=`<div class="alert alert-ok">✅ Применено ${newFeeds.length} кормов</div>`;
-    toast('🌾 Корма обновлены');
+    msg.innerHTML=`<div class="alert alert-ok">вњ… РџСЂРёРјРµРЅРµРЅРѕ ${newFeeds.length} РєРѕСЂРјРѕРІ</div>`;
+    toast('рџЊѕ РљРѕСЂРјР° РѕР±РЅРѕРІР»РµРЅС‹');
     renderSettings();
-  }catch(e){msg.innerHTML=`<div class="alert alert-err">❌ Ошибка: ${e.message}</div>`;}
+  }catch(e){msg.innerHTML=`<div class="alert alert-err">вќЊ РћС€РёР±РєР°: ${e.message}</div>`;}
 }
 // ============================================================
-// FEED TOGGLE (вкл/выкл ингредиента)
+// FEED TOGGLE (РІРєР»/РІС‹РєР» РёРЅРіСЂРµРґРёРµРЅС‚Р°)
 // ============================================================
 async function toggleFeed(feedId, active){
   try {
@@ -1338,32 +1351,32 @@ async function toggleFeed(feedId, active){
     const f = FEEDS.find(x=>x.id===feedId);
     if(f) f.active = active;
     localStorage.setItem('feeds', JSON.stringify(FEEDS));
-    toast(active ? '✅ Ингредиент включён' : '⛔ Ингредиент выключен');
+    toast(active ? 'вњ… РРЅРіСЂРµРґРёРµРЅС‚ РІРєР»СЋС‡С‘РЅ' : 'в›” РРЅРіСЂРµРґРёРµРЅС‚ РІС‹РєР»СЋС‡РµРЅ');
     renderSettings(); // re-render to update strikethrough styling
-  } catch(e) { toast('❌ '+e.message); }
+  } catch(e) { toast('вќЊ '+e.message); }
 }
 
 // ============================================================
-// ADD NEW FEED (добавить новый ингредиент)
+// ADD NEW FEED (РґРѕР±Р°РІРёС‚СЊ РЅРѕРІС‹Р№ РёРЅРіСЂРµРґРёРµРЅС‚)
 // ============================================================
 function showAddFeedModal(){
   document.getElementById('modal-content').innerHTML=`
-    <div class="modal-title">🌱 Новый ингредиент</div>
+    <div class="modal-title">рџЊ± РќРѕРІС‹Р№ РёРЅРіСЂРµРґРёРµРЅС‚</div>
     <div class="form-group">
-      <label>Название</label>
-      <input type="text" id="nf-name" placeholder="Например: Жмых льняной" autofocus>
+      <label>РќР°Р·РІР°РЅРёРµ</label>
+      <input type="text" id="nf-name" placeholder="РќР°РїСЂРёРјРµСЂ: Р–РјС‹С… Р»СЊРЅСЏРЅРѕР№" autofocus>
     </div>
     <div class="form-group">
-      <label>Потребность в месяц (т)</label>
+      <label>РџРѕС‚СЂРµР±РЅРѕСЃС‚СЊ РІ РјРµСЃСЏС† (С‚)</label>
       <input type="number" id="nf-month" placeholder="0.000" step="0.001" min="0" inputmode="decimal">
     </div>
     <div class="form-group">
-      <label>Остаток на сегодня (т)</label>
+      <label>РћСЃС‚Р°С‚РѕРє РЅР° СЃРµРіРѕРґРЅСЏ (С‚)</label>
       <input type="number" id="nf-bal" placeholder="0.000" step="0.001" min="0" inputmode="decimal">
     </div>
     <div id="nf-msg"></div>
-    <button class="btn btn-gold" onclick="doAddFeed()" style="margin-bottom:8px">✅ Добавить</button>
-    <button class="btn btn-ghost" onclick="closeModal()">Отмена</button>`;
+    <button class="btn btn-gold" onclick="doAddFeed()" style="margin-bottom:8px">вњ… Р”РѕР±Р°РІРёС‚СЊ</button>
+    <button class="btn btn-ghost" onclick="closeModal()">РћС‚РјРµРЅР°</button>`;
   document.getElementById('modal-bg').classList.add('show');
 }
 
@@ -1372,27 +1385,27 @@ async function doAddFeed(){
   const pm   = parseFloat(document.getElementById('nf-month').value)||0;
   const bal  = parseFloat(document.getElementById('nf-bal').value)||0;
   const msg  = document.getElementById('nf-msg');
-  if(!name){ msg.innerHTML=`<div class="alert alert-err">⚠️ Введите название</div>`; return; }
-  msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> Сохраняем...</div>`;
+  if(!name){ msg.innerHTML=`<div class="alert alert-err">вљ пёЏ Р’РІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ</div>`; return; }
+  msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> РЎРѕС…СЂР°РЅСЏРµРј...</div>`;
   try {
-    const id = 'f_'+name.toLowerCase().replace(/[^а-яa-z0-9]/gi,'_').slice(0,18)+'_'+Date.now();
+    const id = 'f_'+name.toLowerCase().replace(/[^Р°-СЏa-z0-9]/gi,'_').slice(0,18)+'_'+Date.now();
     const sortOrder = FEEDS.length > 0 ? Math.max(...FEEDS.map(f=>f.sort_order||0))+1 : 0;
-    await sbUpsert('feeds', {id, name, unit:'т', per_month_t:pm, sort_order:sortOrder, active:true});
+    await sbUpsert('feeds', {id, name, unit:'С‚', per_month_t:pm, sort_order:sortOrder, active:true});
     // Set opening balance for both sites
-    for(const site of ['РУС','РОС']){
+    for(const site of ['Р РЈРЎ','Р РћРЎ']){
       if(bal>0) await sbUpsert('opening_balances',{feed_id:id,site,year:CUR_YEAR,month:CUR_MONTH,opening_balance:bal});
     }
     FEEDS = await sbGet('feeds','order=sort_order');
     OPEN_BAL = await sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}`);
     localStorage.setItem('feeds',JSON.stringify(FEEDS));
-    toast(`🌱 Добавлен: ${name}`);
+    toast(`рџЊ± Р”РѕР±Р°РІР»РµРЅ: ${name}`);
     closeModal();
     renderSettings();
-  } catch(e){ msg.innerHTML=`<div class="alert alert-err">❌ ${e.message}</div>`; }
+  } catch(e){ msg.innerHTML=`<div class="alert alert-err">вќЊ ${e.message}</div>`; }
 }
 
 // ============================================================
-// MANUAL BALANCE ADJUSTMENT (корректировка остатка на 1-е число)
+// MANUAL BALANCE ADJUSTMENT (РєРѕСЂСЂРµРєС‚РёСЂРѕРІРєР° РѕСЃС‚Р°С‚РєР° РЅР° 1-Рµ С‡РёСЃР»Рѕ)
 // ============================================================
 function showAdjustModal(feedId){
   const f = FEEDS.find(x=>x.id===feedId);
@@ -1400,22 +1413,22 @@ function showAdjustModal(feedId){
   const curBal = getOpenBal(feedId);
 
   document.getElementById('modal-content').innerHTML=`
-    <div class="modal-title">✏️ Остаток на 1-е число</div>
+    <div class="modal-title">вњЏпёЏ РћСЃС‚Р°С‚РѕРє РЅР° 1-Рµ С‡РёСЃР»Рѕ</div>
     <div class="alert alert-warn" style="font-size:12px">
       ${feedIco(f.name)} <b>${f.name}</b><br>
-      Текущий остаток: <b>${fmt(curBal)} т</b>
+      РўРµРєСѓС‰РёР№ РѕСЃС‚Р°С‚РѕРє: <b>${fmt(curBal)} С‚</b>
     </div>
     <div class="form-group">
-      <label>⚖️ Фактический остаток на 1-е (т)</label>
+      <label>вљ–пёЏ Р¤Р°РєС‚РёС‡РµСЃРєРёР№ РѕСЃС‚Р°С‚РѕРє РЅР° 1-Рµ (С‚)</label>
       <input type="number" id="adj-val" value="${curBal}" step="0.001" min="0" inputmode="decimal">
     </div>
     <div class="form-group">
-      <label>📋 Причина</label>
-      <input type="text" id="adj-note" placeholder="Инвентаризация, пересчёт...">
+      <label>рџ“‹ РџСЂРёС‡РёРЅР°</label>
+      <input type="text" id="adj-note" placeholder="РРЅРІРµРЅС‚Р°СЂРёР·Р°С†РёСЏ, РїРµСЂРµСЃС‡С‘С‚...">
     </div>
     <div id="adj-msg"></div>
-    <button class="btn btn-gold" onclick="doAdjust('${feedId}')" style="margin-bottom:8px">💾 Сохранить</button>
-    <button class="btn btn-ghost" onclick="closeModal()">Отмена</button>`;
+    <button class="btn btn-gold" onclick="doAdjust('${feedId}')" style="margin-bottom:8px">рџ’ѕ РЎРѕС…СЂР°РЅРёС‚СЊ</button>
+    <button class="btn btn-ghost" onclick="closeModal()">РћС‚РјРµРЅР°</button>`;
   document.getElementById('modal-bg').classList.add('show');
 }
 
@@ -1424,8 +1437,8 @@ async function doAdjust(feedId){
   const note   = document.getElementById('adj-note').value.trim();
   const msg    = document.getElementById('adj-msg');
 
-  if(isNaN(newBal)||newBal<0){ msg.innerHTML=`<div class="alert alert-err">⚠️ Введите корректное значение</div>`; return; }
-  msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> Сохраняем...</div>`;
+  if(isNaN(newBal)||newBal<0){ msg.innerHTML=`<div class="alert alert-err">вљ пёЏ Р’РІРµРґРёС‚Рµ РєРѕСЂСЂРµРєС‚РЅРѕРµ Р·РЅР°С‡РµРЅРёРµ</div>`; return; }
+  msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> РЎРѕС…СЂР°РЅСЏРµРј...</div>`;
 
   try {
     await sbUpsert('opening_balances',{
@@ -1440,15 +1453,15 @@ async function doAdjust(feedId){
       year:CUR_YEAR, month:CUR_MONTH, day:1,
       user_name:ME && ME.name ? ME.name : TG_NAME, user_role:'admin',
       amount:newBal,
-      note:`[КОРРЕКЦИЯ ОСТ.] ${note||'Ручная корректировка остатка на 1-е'}`
+      note:`[РљРћР Р Р•РљР¦РРЇ РћРЎРў.] ${note||'Р СѓС‡РЅР°СЏ РєРѕСЂСЂРµРєС‚РёСЂРѕРІРєР° РѕСЃС‚Р°С‚РєР° РЅР° 1-Рµ'}`
     });
     OPEN_BAL = await sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}`);
     localStorage.setItem('open_bal',JSON.stringify(OPEN_BAL));
-    msg.innerHTML=`<div class="alert alert-ok">✅ Остаток → ${fmt(newBal)} т</div>`;
-    toast('✅ Остаток сохранён');
+    msg.innerHTML=`<div class="alert alert-ok">вњ… РћСЃС‚Р°С‚РѕРє в†’ ${fmt(newBal)} С‚</div>`;
+    toast('вњ… РћСЃС‚Р°С‚РѕРє СЃРѕС…СЂР°РЅС‘РЅ');
     setTimeout(()=>closeModal(), 1400);
     if(tg) tg.HapticFeedback && tg.HapticFeedback.notificationOccurred('success');
-  } catch(e){ msg.innerHTML=`<div class="alert alert-err">❌ ${e.message}</div>`; }
+  } catch(e){ msg.innerHTML=`<div class="alert alert-err">вќЊ ${e.message}</div>`; }
 }
 
 function closeModal(){
@@ -1470,3 +1483,4 @@ setInterval(()=>{reloadDayData().then(render);},60000);
 </script>
 </body>
 </html>
+
