@@ -753,8 +753,9 @@ async function loadAll(){
   try {
     let users = await sbGet('app_users', `tg_id=eq.${TG_ID}`);
     if (!users || users.length === 0) {
-      const allUsers = await sbGet('app_users','select=id&limit=1');
-      const isFirst  = !allUsers || allUsers.length === 0;
+      const allUsers = await sbGet('app_users','select=tg_id&limit=5');
+      const hasOnlyBrowserUser = TG_ID > 0 && allUsers && allUsers.length === 1 && Number(allUsers[0].tg_id) === 0;
+      const isFirst  = !allUsers || allUsers.length === 0 || hasOnlyBrowserUser;
       if (isFirst) {
         await sbInsert('app_users', {tg_id:TG_ID, name:TG_NAME, username:TG_USERNAME, role:'admin', site:'РУС'});
         users = [{tg_id:TG_ID, name:TG_NAME, username:TG_USERNAME, role:'admin', site:'РУС'}];
