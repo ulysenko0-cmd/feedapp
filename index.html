@@ -246,10 +246,11 @@ body::before {
 }
 .fc-val {
   font-family: var(--f-display);
-  font-size: 21px; font-weight: 900; line-height: 1;
-  color: var(--cream);
+  font-size: 26px; font-weight: 900; line-height: 1;
+  color: #3b2a16;
+  text-shadow: 0 1px 0 rgba(255,255,255,.45);
 }
-.fc-unit { font-size: 11px; color: var(--muted); font-family: var(--f-body); font-weight: 600; }
+.fc-unit { font-size: 11px; color: #4b351c; font-family: var(--f-body); font-weight: 800; }
 .pbar { height: 4px; background: var(--s3); border-radius: 2px; margin-top: 8px; overflow:hidden; }
 .pbar-f { height:100%; border-radius:2px; background: linear-gradient(90deg, var(--lime), var(--gold)); transition: width .5s; }
 .pbar-f.warn { background: linear-gradient(90deg, var(--gold2), var(--red)); }
@@ -495,6 +496,10 @@ input[type=number] { font-variant-numeric: tabular-nums; }
   font-size: 9px; font-weight: 800; color: var(--muted);
   text-transform: uppercase; letter-spacing: .5px; margin-top: 3px;
 }
+.stat-box-hint {
+  font-size: 8px; font-weight: 700; color: var(--muted2);
+  margin-top: 2px; text-transform: none; letter-spacing: 0;
+}
 
 /* ---- WHEAT DECORATION ---- */
 .wheat-divider {
@@ -677,8 +682,9 @@ async function sbGet(table, filter='') {
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
-async function sbUpsert(table, data) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+async function sbUpsert(table, data, onConflict='') {
+  const conflict = onConflict ? `?on_conflict=${onConflict}` : '';
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}${conflict}`, {
     method:'POST',
     headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
     body:JSON.stringify(data)
@@ -896,8 +902,9 @@ function renderDash(){
     const rec=getDayRec(f.id,selDay);
     totalIntakeToday+=(rec.intake||0);
     const be=balEnd(f.id,selDay);
-    const pct=f.per_month_t>0?be/f.per_month_t*100:100;
-    if(pct<15)critFeeds++; else if(pct<30)warnFeeds++;
+    const norm=dailyNorm(f);
+    const dLeft=norm>0?be/norm:99;
+    if(dLeft<=3)critFeeds++; else if(dLeft<=7)warnFeeds++;
   });
   const statStrip=`<div class="stat-strip">
     <div class="stat-box">
@@ -907,10 +914,12 @@ function renderDash(){
     <div class="stat-box">
       <div class="stat-box-val" style="color:var(--red)">${critFeeds}</div>
       <div class="stat-box-lbl">Критично</div>
+      <div class="stat-box-hint">≤ 3 дня</div>
     </div>
     <div class="stat-box">
       <div class="stat-box-val" style="color:var(--gold)">${warnFeeds}</div>
       <div class="stat-box-lbl">Внимание</div>
+      <div class="stat-box-hint">4–7 дней</div>
     </div>
   </div>`;
 
@@ -918,9 +927,10 @@ function renderDash(){
   let cards = activeFeeds().map(f=>{
     const balE=balEnd(f.id,selDay), rec=getDayRec(f.id,selDay), norm=dailyNorm(f);
     const exp=rec.expense>0?rec.expense:norm;
-    const pct=f.per_month_t>0?Math.min(100,balE/f.per_month_t*100):100;
+    const need=monthlyNeed(f);
+    const pct=need>0?Math.min(100,balE/need*100):100;
     const dLeft=norm>0?Math.floor(balE/norm):99;
-    const cls=pct<15?'crit':pct<30?'warn':'';
+    const cls=dLeft<=3?'crit':dLeft<=7?'warn':'';
     return `<div class="fcard ${cls}">
       <span class="fcard-ico">${feedIco(f.name)}</span>
       <div class="fc-name">${f.name}</div>
@@ -1050,7 +1060,7 @@ async function doIntake(){
   msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> Сохранение...</div>`;
   try{
     const existing=getDayRec(feedId,day);
-    await sbUpsert('day_records',{feed_id:feedId,site:curSite,year:CUR_YEAR,month:CUR_MONTH,day,intake:(existing.intake||0)+amt,expense:existing.expense||0});
+    await sbUpsert('day_records',{feed_id:feedId,site:curSite,year:CUR_YEAR,month:CUR_MONTH,day,intake:(existing.intake||0)+amt,expense:existing.expense||0},'feed_id,site,year,month,day');
     await sbInsert('intake_log',{feed_id:feedId,feed_name:feed.name,site:curSite,year:CUR_YEAR,month:CUR_MONTH,day,user_name:ME && ME.name ? ME.name : TG_NAME,user_role:ME && ME.role,amount:amt,note});
     await reloadDayData();
     document.getElementById('iAmt').value='';
@@ -1234,7 +1244,7 @@ async function saveUserSite(tgId,site){
 async function saveOB(){
   const rows=FEEDS.map(f=>({feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,opening_balance:parseFloat((document.getElementById('ob_'+f.id) ? document.getElementById('ob_'+f.id).value : 0))||0}));
   try{
-    await sbUpsert('opening_balances',rows);
+    await sbUpsert('opening_balances',rows,'feed_id,site,year,month');
     OPEN_BAL=await sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}`);
     localStorage.setItem('open_bal',JSON.stringify(OPEN_BAL));
     toast('✅ Остатки сохранены');
@@ -1246,7 +1256,7 @@ async function saveMN(){
   try{
     for(const f of activeFeeds()){
       const val=parseFloat((document.getElementById('mn_'+f.id) ? document.getElementById('mn_'+f.id).value : 0))||0;
-      await sbUpsert('monthly_needs',{feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:val});
+      await sbUpsert('monthly_needs',{feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:val},'feed_id,site,year,month');
       const r=MONTHLY_NEEDS.find(x=>x.feed_id===f.id);
       if(r) r.per_month_t=val;
       else MONTHLY_NEEDS.push({feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:val});
@@ -1327,10 +1337,10 @@ async function applyXLS(jsonStr){
     for(let i=0;i<newFeeds.length;i++){
       const f=newFeeds[i];
       await sbUpsert('feeds',{id:f.id,name:f.name,unit:'т',per_month_t:f.per_month_t,sort_order:i+1,active:true});
-      await sbUpsert('monthly_needs',{feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:f.per_month_t});
+      await sbUpsert('monthly_needs',{feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:f.per_month_t},'feed_id,site,year,month');
     }
     for(const old of FEEDS){
-      if(!activeIds.includes(old.id)) await sbUpsert('monthly_needs',{feed_id:old.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:0});
+      if(!activeIds.includes(old.id)) await sbUpsert('monthly_needs',{feed_id:old.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:0},'feed_id,site,year,month');
     }
     FEEDS=await sbGet('feeds','order=sort_order');
     MONTHLY_NEEDS=await sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`);
@@ -1393,7 +1403,7 @@ async function doAddFeed(){
     await sbUpsert('feeds', {id, name, unit:'т', per_month_t:pm, sort_order:sortOrder, active:true});
     // Set opening balance for both sites
     for(const site of ['РУС','РОС']){
-      if(bal>0) await sbUpsert('opening_balances',{feed_id:id,site,year:CUR_YEAR,month:CUR_MONTH,opening_balance:bal});
+      if(bal>0) await sbUpsert('opening_balances',{feed_id:id,site,year:CUR_YEAR,month:CUR_MONTH,opening_balance:bal},'feed_id,site,year,month');
     }
     FEEDS = await sbGet('feeds','order=sort_order');
     OPEN_BAL = await sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}`);
@@ -1445,7 +1455,7 @@ async function doAdjust(feedId){
       feed_id:feedId, site:curSite,
       year:CUR_YEAR, month:CUR_MONTH,
       opening_balance:newBal
-    });
+    },'feed_id,site,year,month');
     // Log in intake_log as audit record
     const f = FEEDS.find(x=>x.id===feedId);
     await sbInsert('intake_log',{
