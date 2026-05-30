@@ -1154,9 +1154,9 @@ function renderSettings(){
     <div class="form-group">
       <label style="display:flex;align-items:center;justify-content:space-between">
         <span>${feedIco(f.name)} ${f.name}</span>
-        <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px;width:auto" onclick="showAdjustModal('${f.id}')">✏️ Исправить</button>
+        <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px;width:auto" onclick="saveOneOB('${f.id}')">💾 Сохр.</button>
       </label>
-      <input type="number" id="ob_${f.id}" value="${getOpenBal(f.id)}" min="0" step="0.01" inputmode="decimal">
+      <input type="number" id="ob_${f.id}" value="${getOpenBal(f.id)||''}" min="0" step="0.01" inputmode="decimal" data-original="${getOpenBal(f.id)}">
     </div>`).join('');
 
   // Monthly needs — only active feeds
@@ -1242,14 +1242,38 @@ async function saveUserSite(tgId,site){
 // SAVE SETTINGS
 // ============================================================
 async function saveOB(){
-  const rows=FEEDS.map(f=>({feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,opening_balance:parseFloat((document.getElementById('ob_'+f.id) ? document.getElementById('ob_'+f.id).value : 0))||0}));
+  const rows=activeFeeds().map(f=>{
+    const el=document.getElementById('ob_'+f.id);
+    if(!el || el.value==='') return null;
+    const val=parseFloat(el.value);
+    const original=parseFloat(el.dataset.original||'0');
+    if(isNaN(val) || val===original) return null;
+    return {feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,opening_balance:val};
+  }).filter(Boolean);
+  if(!rows.length){toast('Нет новых остатков для сохранения');return;}
   try{
     await sbUpsert('opening_balances',rows,'feed_id,site,year,month');
     OPEN_BAL=await sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}`);
     localStorage.setItem('open_bal',JSON.stringify(OPEN_BAL));
+    rows.forEach(r=>{const el=document.getElementById('ob_'+r.feed_id); if(el) el.dataset.original=String(r.opening_balance);});
     toast('✅ Остатки сохранены');
     const m=document.getElementById('ob-msg');
     if(m){m.innerHTML=`<div class="alert alert-ok" style="margin-top:8px">✅ Сохранено</div>`;setTimeout(()=>m.innerHTML='',2000);}
+  }catch(e){toast('❌ '+e.message);}
+}
+
+async function saveOneOB(feedId){
+  const el=document.getElementById('ob_'+feedId);
+  if(!el || el.value===''){toast('Введите остаток');return;}
+  const val=parseFloat(el.value);
+  if(isNaN(val)||val<0){toast('Введите корректный остаток');return;}
+  try{
+    await sbUpsert('opening_balances',{feed_id:feedId,site:curSite,year:CUR_YEAR,month:CUR_MONTH,opening_balance:val},'feed_id,site,year,month');
+    OPEN_BAL=await sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}`);
+    localStorage.setItem('open_bal',JSON.stringify(OPEN_BAL));
+    el.dataset.original=String(val);
+    toast('✅ Остаток сохранён');
+    render();
   }catch(e){toast('❌ '+e.message);}
 }
 async function saveMN(){
