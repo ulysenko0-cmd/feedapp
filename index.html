@@ -734,7 +734,7 @@ function monthlyNeed(f){
 function dailyNorm(f){ return monthlyNeed(f)/daysInMonth(); }
 function siteName(k){ return SITES[k]||k; }
 // Only active feeds with current site monthly need shown in dash/intake/month
-function activeFeeds(){ return FEEDS.filter(f=>f.active!==false && monthlyNeed(f)>0); }
+function activeFeeds(){ return uniqueFeedsByName(FEEDS.filter(f=>f.active!==false && monthlyNeed(f)>0)); }
 
 function getOpenBal(feedId){
   const r=OPEN_BAL.find(x=>x.feed_id===feedId&&x.site===curSite&&x.year===CUR_YEAR&&x.month===CUR_MONTH);
@@ -1293,7 +1293,7 @@ function renderSettings(){
     </div>`).join('');
 
   // Opening balances can be edited for a selected month.
-  let obRows=FEEDS.filter(f=>f.active!==false).map(f=>`
+  let obRows=uniqueFeedsByName(FEEDS.filter(f=>f.active!==false)).map(f=>`
     <div class="form-group">
       <label style="display:flex;align-items:center;justify-content:space-between">
         <span>${feedIco(f.name)} ${f.name}</span>
@@ -1303,7 +1303,7 @@ function renderSettings(){
     </div>`).join('');
 
   // Monthly needs are edited per site, including feeds with zero need for this site.
-  let mnRows=FEEDS.filter(f=>f.active!==false).map(f=>`
+  let mnRows=uniqueFeedsByName(FEEDS.filter(f=>f.active!==false)).map(f=>`
     <div class="form-group">
       <label>${feedIco(f.name)} ${f.name}</label>
       <input type="number" id="mn_${f.id}" value="${monthlyNeed(f)}" min="0" step="0.001" inputmode="decimal">
@@ -1433,7 +1433,7 @@ async function saveOneOB(feedId){
 }
 async function saveMN(){
   try{
-    for(const f of FEEDS.filter(x=>x.active!==false)){
+    for(const f of uniqueFeedsByName(FEEDS.filter(x=>x.active!==false))){
       const val=parseFloat((document.getElementById('mn_'+f.id) ? document.getElementById('mn_'+f.id).value : 0))||0;
       await sbUpsert('monthly_needs',{feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:val},'feed_id,site,year,month');
       const r=MONTHLY_NEEDS.find(x=>x.feed_id===f.id&&x.site===curSite&&x.year===CUR_YEAR&&x.month===CUR_MONTH);
@@ -1450,11 +1450,32 @@ async function saveMN(){
 // ============================================================
 // EXCEL
 // ============================================================
+function normFeedName(name){
+  return String(name||'')
+    .trim()
+    .toLowerCase()
+    .replace(/ё/g,'е')
+    .replace(/\s+/g,' ')
+    .replace(/[.,;:]+$/g,'');
+}
+function findExistingFeedByName(name){
+  const key=normFeedName(name);
+  return FEEDS.find(f=>normFeedName(f.name)===key);
+}
+function uniqueFeedsByName(list){
+  const seen=new Set();
+  return list.filter(f=>{
+    const key=normFeedName(f.name);
+    if(seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 function makeFeedId(name){
   const map={
     'шрот соевый':'shrot_soy','соя экструдированная':'soya_extr','кукуруза':'kukuruza','мел':'mel','патока':'patoka','шрот рапсовый':'shrot_raps','пивная дробина':'piv_drobina','льняной жмых':'lnyanoy','соль':'sol','сода (бикарбонад натрия)':'soda','сода (бикарбонат натрия)':'soda','молоко':'moloko','зцм':'zcm','кетостоп':'ketostop','фунгистат':'fungistat','саф 100':'saf_100','милкацид':'milkacid','дайри вив':'dairy_viv','оксид магния':'oksid_magniya','агроктима анион':'agroktima_anion','нутристар лакт. европремикс':'nutristar_lakt','нутристар сухос. европремикс':'nutristar_suhos','кк стартер(богдан)':'kk_starter_bogdan'
   };
-  const key=String(name||'').trim().toLowerCase();
+  const key=normFeedName(name);
   if(map[key]) return map[key];
   return 'f_'+key.replace(/[^а-яa-z0-9]/gi,'_').replace(/^_+|_+$/g,'').slice(0,32);
 }
@@ -1477,8 +1498,9 @@ function parseExcelFeeds(rows){
     if(!name||/^итого/i.test(name))continue;
     const pm=parseFloat(String(row[needCol]||'').replace(',','.'));
     if(!isNaN(pm)&&pm>0&&pm<5000){
-      const key=name.toLowerCase();
-      if(!seen.has(key)){seen.add(key);newFeeds.push({id:makeFeedId(name),name,per_month_t:Math.round(pm*1000)/1000});}
+      const key=normFeedName(name);
+      const existing=findExistingFeedByName(name);
+      if(!seen.has(key)){seen.add(key);newFeeds.push({id:existing?existing.id:makeFeedId(name),name:existing?existing.name:name,per_month_t:Math.round(pm*1000)/1000});}
     }
   }
   return newFeeds;
@@ -1577,9 +1599,10 @@ async function doAddFeed(){
   if(!name){ msg.innerHTML=`<div class="alert alert-err">⚠️ Введите название</div>`; return; }
   msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> Сохраняем...</div>`;
   try {
-    const id = 'f_'+name.toLowerCase().replace(/[^а-яa-z0-9]/gi,'_').slice(0,18)+'_'+Date.now();
+    const existing = findExistingFeedByName(name);
+    const id = existing ? existing.id : 'f_'+normFeedName(name).replace(/[^а-яa-z0-9]/gi,'_').slice(0,18)+'_'+Date.now();
     const sortOrder = FEEDS.length > 0 ? Math.max(...FEEDS.map(f=>f.sort_order||0))+1 : 0;
-    await sbUpsert('feeds', {id, name, unit:'т', per_month_t:pm, sort_order:sortOrder, active:true});
+    await sbUpsert('feeds', {id, name:existing?existing.name:name, unit:'т', per_month_t:pm, sort_order:existing?existing.sort_order:sortOrder, active:true});
     await sbUpsert('monthly_needs',{feed_id:id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:pm},'feed_id,site,year,month');
     if(bal>0) await sbUpsert('opening_balances',{feed_id:id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,opening_balance:bal},'feed_id,site,year,month');
     FEEDS = await sbGet('feeds','order=sort_order');
