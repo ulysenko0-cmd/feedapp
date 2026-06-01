@@ -1109,51 +1109,118 @@ function renderMonth(){
     ${siteToggleHtml()}
     <div class="sec">
       <div class="sec-head"><span class="ico">📅</span>${mnames[CUR_MONTH]} ${CUR_YEAR} &nbsp;<span style="font-size:9px;color:var(--muted2)">🟢 приход · серый = остаток</span></div>
-      <div style="padding:10px 12px 0;display:flex;justify-content:flex-end">
-        <button class="btn btn-gold btn-sm" style="width:auto;padding:8px 12px" onclick="downloadMonthReport()">Скачать Excel</button>
+      <div style="padding:10px 12px 0;display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
+        <label style="font-size:10px;color:var(--muted);font-weight:900;text-transform:uppercase">С
+          <input type="date" id="repFrom" value="${CUR_YEAR}-${String(CUR_MONTH).padStart(2,'0')}-01" style="margin-top:4px">
+        </label>
+        <label style="font-size:10px;color:var(--muted);font-weight:900;text-transform:uppercase">По
+          <input type="date" id="repTo" value="${CUR_YEAR}-${String(CUR_MONTH).padStart(2,'0')}-${String(daysInMonth()).padStart(2,'0')}" style="margin-top:4px">
+        </label>
+        <button class="btn btn-gold btn-sm" style="width:auto;padding:10px 12px;white-space:nowrap" onclick="downloadMonthReport()">Excel</button>
       </div>
       <div class="month-wrap"><table class="tbl"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
     </div>`;
 }
 
-function monthReportRows(){
-  const dim=daysInMonth();
+function parseDateInput(v){
+  const p=(v||'').split('-').map(Number);
+  if(p.length!==3 || !p[0] || !p[1] || !p[2]) return null;
+  return new Date(p[0],p[1]-1,p[2]);
+}
+function dateKey(d){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function monthRange(from,to){
+  const out=[];
+  const d=new Date(from.getFullYear(),from.getMonth(),1);
+  while(d<=to){
+    out.push({year:d.getFullYear(),month:d.getMonth()+1});
+    d.setMonth(d.getMonth()+1);
+  }
+  return out;
+}
+function periodNeed(feed, needs, y, m){
+  const r=needs.find(x=>x.feed_id===feed.id&&x.site===curSite&&Number(x.year)===y&&Number(x.month)===m);
+  return r ? Number(r.per_month_t||0) : Number(feed.per_month_t||0);
+}
+function periodOpen(feedId, opens, y, m){
+  const r=opens.find(x=>x.feed_id===feedId&&x.site===curSite&&Number(x.year)===y&&Number(x.month)===m);
+  return r ? Number(r.opening_balance||0) : 0;
+}
+function periodRec(feedId, records, y, m, d){
+  return records.find(x=>x.feed_id===feedId&&x.site===curSite&&Number(x.year)===y&&Number(x.month)===m&&Number(x.day)===d)||{intake:0,expense:0};
+}
+async function loadPeriodData(from,to){
+  const months=monthRange(from,to);
+  const packs=await Promise.all(months.map(async m=>{
+    const [records, opens, needs]=await Promise.all([
+      sbGet('day_records',`year=eq.${m.year}&month=eq.${m.month}&site=eq.${curSite}`),
+      sbGet('opening_balances',`year=eq.${m.year}&month=eq.${m.month}&site=eq.${curSite}`),
+      sbGet('monthly_needs',`year=eq.${m.year}&month=eq.${m.month}&site=eq.${curSite}`)
+    ]);
+    return {records:records||[], opens:opens||[], needs:needs||[]};
+  }));
+  return {
+    records:packs.flatMap(p=>p.records),
+    opens:packs.flatMap(p=>p.opens),
+    needs:packs.flatMap(p=>p.needs)
+  };
+}
+function periodReportRows(from,to,data){
   return FEEDS
     .filter(f=>f.active!==false)
     .map(f=>{
-      let intake=0, expense=0;
-      for(let d=1;d<=dim;d++){
-        const rec=getDayRec(f.id,d);
-        intake += Number(rec.intake||0);
-        expense += Number(rec.expense||0)>0 ? Number(rec.expense||0) : dailyNorm(f);
+      let opening=periodOpen(f.id,data.opens,from.getFullYear(),from.getMonth()+1);
+      let intake=0, expense=0, touched=false;
+      for(let d=new Date(from.getFullYear(),from.getMonth(),1); d<=to; d.setDate(d.getDate()+1)){
+        const y=d.getFullYear(), m=d.getMonth()+1, day=d.getDate();
+        const need=periodNeed(f,data.needs,y,m);
+        const norm=need/(new Date(y,m,0).getDate());
+        const rec=periodRec(f.id,data.records,y,m,day);
+        const recIntake=Number(rec.intake||0);
+        const recExpense=Number(rec.expense||0)>0 ? Number(rec.expense||0) : norm;
+        if(need>0 || recIntake>0 || Number(rec.expense||0)>0) touched=true;
+        if(d<from){
+          opening += recIntake - recExpense;
+        }else{
+          intake += recIntake;
+          expense += recExpense;
+        }
       }
-      const opening=Number(getOpenBal(f.id)||0);
       const ending=Math.max(0, opening + intake - expense);
-      return {name:f.name, opening, intake, expense, ending, need:monthlyNeed(f)};
+      return {name:f.name, opening, intake, expense, ending, touched};
     })
-    .filter(r=>r.need>0 || r.opening>0 || r.intake>0 || r.expense>0 || r.ending>0);
+    .filter(r=>r.touched || r.opening>0 || r.intake>0 || r.expense>0 || r.ending>0);
 }
 
-function downloadMonthReport(){
-  if(!window.XLSX){toast('Excel не загрузился, обновите приложение');return;}
-  const monthNames=['','Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-  const rows=monthReportRows();
-  if(!rows.length){toast('Нет данных для отчета');return;}
-  const round=v=>Math.round(Number(v||0)*1000)/1000;
-  const aoa=[
-    ['Площадка', siteName(curSite)],
-    ['Месяц', `${monthNames[CUR_MONTH]} ${CUR_YEAR}`],
-    [],
-    ['Ингредиент','Остаток на начало месяца, т','Приход за месяц, т','Расход за месяц, т','Остаток на конец месяца, т']
-  ];
-  rows.forEach(r=>aoa.push([r.name, round(r.opening), round(r.intake), round(r.expense), round(r.ending)]));
-  const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:34},{wch:24},{wch:18},{wch:18},{wch:26}];
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Движение');
-  const ym=`${CUR_YEAR}-${String(CUR_MONTH).padStart(2,'0')}`;
-  const site=siteName(curSite).replace(/[\\/:*?"<>|]/g,'_');
-  XLSX.writeFile(wb,`Движение кормов ${site} ${ym}.xlsx`);
+async function downloadMonthReport(){
+  try{
+    if(!window.XLSX){toast('Excel не загрузился, обновите приложение');return;}
+    const from=parseDateInput(document.getElementById('repFrom') && document.getElementById('repFrom').value);
+    const to=parseDateInput(document.getElementById('repTo') && document.getElementById('repTo').value);
+    if(!from || !to){toast('Выберите период');return;}
+    if(from>to){toast('Дата начала больше даты окончания');return;}
+    toast('Готовлю отчет...');
+    const data=await loadPeriodData(from,to);
+    const rows=periodReportRows(from,to,data);
+    if(!rows.length){toast('Нет данных для отчета');return;}
+    const round=v=>Math.round(Number(v||0)*1000)/1000;
+    const aoa=[
+      ['Площадка', siteName(curSite)],
+      ['Период', `${dateKey(from)} — ${dateKey(to)}`],
+      [],
+      ['Ингредиент','Остаток на начало периода, т','Приход за период, т','Расход за период, т','Остаток на конец периода, т']
+    ];
+    rows.forEach(r=>aoa.push([r.name, round(r.opening), round(r.intake), round(r.expense), round(r.ending)]));
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols']=[{wch:34},{wch:24},{wch:18},{wch:18},{wch:26}];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'Движение');
+    const site=siteName(curSite).replace(/[\\/:*?"<>|]/g,'_');
+    XLSX.writeFile(wb,`Движение кормов ${site} ${dateKey(from)}_${dateKey(to)}.xlsx`);
+  }catch(e){
+    toast('Не удалось скачать отчет');
+  }
 }
 
 // ============================================================
