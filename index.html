@@ -721,12 +721,15 @@ let selDay  = CUR_DAY;
 let curPage = 'dash';
 let ME = null;
 
-let FEEDS=[], DAY_DATA=[], OPEN_BAL=[], LOGS=[], USERS=[], MONTHLY_NEEDS=[];
+let FEEDS=[], DAY_DATA=[], OPEN_BAL=[], EDIT_OPEN_BAL=[], LOGS=[], USERS=[], MONTHLY_NEEDS=[];
+let OB_YEAR=CUR_YEAR, OB_MONTH=CUR_MONTH;
 
 function daysInMonth(){ return new Date(CUR_YEAR,CUR_MONTH,0).getDate(); }
 function monthlyNeed(f){
   const r = MONTHLY_NEEDS.find(x=>x.feed_id===f.id&&x.site===curSite&&x.year===CUR_YEAR&&x.month===CUR_MONTH);
-  return r ? Number(r.per_month_t||0) : Number(f.per_month_t||0);
+  if(r) return Number(r.per_month_t||0);
+  const siteMonthLoaded = MONTHLY_NEEDS.some(x=>x.site===curSite&&x.year===CUR_YEAR&&x.month===CUR_MONTH);
+  return siteMonthLoaded ? 0 : Number(f.per_month_t||0);
 }
 function dailyNorm(f){ return monthlyNeed(f)/daysInMonth(); }
 function siteName(k){ return SITES[k]||k; }
@@ -736,6 +739,22 @@ function activeFeeds(){ return FEEDS.filter(f=>f.active!==false && monthlyNeed(f
 function getOpenBal(feedId){
   const r=OPEN_BAL.find(x=>x.feed_id===feedId&&x.site===curSite&&x.year===CUR_YEAR&&x.month===CUR_MONTH);
   return r && r.opening_balance ? r.opening_balance : 0;
+}
+function getEditOpenBal(feedId){
+  const r=EDIT_OPEN_BAL.find(x=>x.feed_id===feedId&&x.site===curSite&&Number(x.year)===OB_YEAR&&Number(x.month)===OB_MONTH);
+  return r && r.opening_balance ? r.opening_balance : 0;
+}
+function obPeriodValue(){
+  return `${OB_YEAR}-${String(OB_MONTH).padStart(2,'0')}`;
+}
+async function loadEditOpenBalances(){
+  EDIT_OPEN_BAL = await sbGet('opening_balances',`year=eq.${OB_YEAR}&month=eq.${OB_MONTH}&site=eq.${curSite}`);
+}
+function setOBPeriod(v){
+  const p=(v||'').split('-').map(Number);
+  if(p.length!==2 || !p[0] || !p[1]) return;
+  OB_YEAR=p[0]; OB_MONTH=p[1];
+  loadEditOpenBalances().then(renderSettings).catch(()=>toast('Не удалось загрузить остатки'));
 }
 function getDayRec(feedId,day){
   return DAY_DATA.find(x=>x.feed_id===feedId&&x.site===curSite&&x.year===CUR_YEAR&&x.month===CUR_MONTH&&x.day===day)||{intake:0,expense:0};
@@ -780,11 +799,11 @@ async function loadAll(){
     const [feeds, dayData, openBal, logs, monthlyNeeds] = await Promise.all([
       sbGet('feeds','order=sort_order'),
       sbGet('day_records',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
-      sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}`),
+      sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
       sbGet('intake_log',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}&order=created_at.desc&limit=100`),
       sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`)
     ]);
-    FEEDS=feeds||[]; DAY_DATA=dayData||[]; OPEN_BAL=openBal||[]; LOGS=logs||[]; MONTHLY_NEEDS=monthlyNeeds||[];
+    FEEDS=feeds||[]; DAY_DATA=dayData||[]; OPEN_BAL=openBal||[]; EDIT_OPEN_BAL=OPEN_BAL; LOGS=logs||[]; MONTHLY_NEEDS=monthlyNeeds||[];
     if (ME.role==='admin') USERS = await sbGet('app_users','order=created_at');
 
     applyRoleUI();
@@ -794,6 +813,7 @@ async function loadAll(){
     FEEDS    = JSON.parse(localStorage.getItem('feeds')||'[]');
     DAY_DATA = JSON.parse(localStorage.getItem('day_data')||'[]');
     OPEN_BAL = JSON.parse(localStorage.getItem('open_bal')||'[]');
+    EDIT_OPEN_BAL = OPEN_BAL;
     LOGS     = JSON.parse(localStorage.getItem('logs')||'[]');
     MONTHLY_NEEDS = JSON.parse(localStorage.getItem('monthly_needs')||'[]');
     ME       = JSON.parse(localStorage.getItem('me')||'null');
@@ -817,7 +837,7 @@ async function reloadDayData(includeStatic=false){
     LOGS = logs || [];
     if (includeStatic) {
       const [openBal, monthlyNeeds] = await Promise.all([
-        sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}`),
+        sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
         sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`)
       ]);
       OPEN_BAL = openBal || [];
@@ -862,7 +882,7 @@ function setSite(s){
   if (!CAN.otherSite(ME && ME.role, ME && ME.site, s)) { toast('🔒 Нет доступа к этой площадке'); return; }
   curSite=s;
   document.querySelectorAll('.site-btn').forEach(b=>b.classList.toggle('on',b.dataset.s===s));
-  reloadDayData(true).then(render);
+  reloadDayData(true).then(()=>loadEditOpenBalances()).then(render);
 }
 
 function render(){
@@ -1272,18 +1292,18 @@ function renderSettings(){
       </div>
     </div>`).join('');
 
-  // Opening balances — only active feeds, with adjust button
-  let obRows=activeFeeds().map(f=>`
+  // Opening balances can be edited for a selected month.
+  let obRows=FEEDS.filter(f=>f.active!==false).map(f=>`
     <div class="form-group">
       <label style="display:flex;align-items:center;justify-content:space-between">
         <span>${feedIco(f.name)} ${f.name}</span>
         <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px;width:auto" onclick="saveOneOB('${f.id}')">💾 Сохр.</button>
       </label>
-      <input type="number" id="ob_${f.id}" value="${getOpenBal(f.id)||''}" min="0" step="0.01" inputmode="decimal" data-original="${getOpenBal(f.id)}">
+      <input type="number" id="ob_${f.id}" value="${getEditOpenBal(f.id)||''}" min="0" step="0.01" inputmode="decimal" data-original="${getEditOpenBal(f.id)}">
     </div>`).join('');
 
-  // Monthly needs — only active feeds
-  let mnRows=activeFeeds().map(f=>`
+  // Monthly needs are edited per site, including feeds with zero need for this site.
+  let mnRows=FEEDS.filter(f=>f.active!==false).map(f=>`
     <div class="form-group">
       <label>${feedIco(f.name)} ${f.name}</label>
       <input type="number" id="mn_${f.id}" value="${monthlyNeed(f)}" min="0" step="0.001" inputmode="decimal">
@@ -1313,7 +1333,13 @@ function renderSettings(){
 
     <div class="sec">
       <div class="sec-head"><span class="ico">📦</span>Остатки на 1-е число — ${siteName(curSite)}</div>
-      <div class="sec-body">${obRows}<div id="ob-msg"></div>
+      <div class="sec-body">
+        <div class="form-group">
+          <label>Месяц остатков</label>
+          <input type="month" id="obPeriod" value="${obPeriodValue()}" onchange="setOBPeriod(this.value)">
+        </div>
+        <div class="alert alert-info" style="font-size:12px">Выбранный месяц сохраняется отдельно. Например, 2026-05 = остатки на 01.05.</div>
+        ${obRows}<div id="ob-msg"></div>
         <button class="btn btn-gold" onclick="saveOB()">💾 Сохранить остатки</button>
       </div>
     </div>
@@ -1365,19 +1391,22 @@ async function saveUserSite(tgId,site){
 // SAVE SETTINGS
 // ============================================================
 async function saveOB(){
-  const rows=activeFeeds().map(f=>{
+  const rows=FEEDS.filter(f=>f.active!==false).map(f=>{
     const el=document.getElementById('ob_'+f.id);
     if(!el || el.value==='') return null;
     const val=parseFloat(el.value);
     const original=parseFloat(el.dataset.original||'0');
     if(isNaN(val) || val===original) return null;
-    return {feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,opening_balance:val};
+    return {feed_id:f.id,site:curSite,year:OB_YEAR,month:OB_MONTH,opening_balance:val};
   }).filter(Boolean);
   if(!rows.length){toast('Нет новых остатков для сохранения');return;}
   try{
     await sbUpsert('opening_balances',rows,'feed_id,site,year,month');
-    OPEN_BAL=await sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}`);
-    localStorage.setItem('open_bal',JSON.stringify(OPEN_BAL));
+    await loadEditOpenBalances();
+    if(OB_YEAR===CUR_YEAR && OB_MONTH===CUR_MONTH){
+      OPEN_BAL=EDIT_OPEN_BAL;
+      localStorage.setItem('open_bal',JSON.stringify(OPEN_BAL));
+    }
     rows.forEach(r=>{const el=document.getElementById('ob_'+r.feed_id); if(el) el.dataset.original=String(r.opening_balance);});
     toast('✅ Остатки сохранены');
     const m=document.getElementById('ob-msg');
@@ -1391,9 +1420,12 @@ async function saveOneOB(feedId){
   const val=parseFloat(el.value);
   if(isNaN(val)||val<0){toast('Введите корректный остаток');return;}
   try{
-    await sbUpsert('opening_balances',{feed_id:feedId,site:curSite,year:CUR_YEAR,month:CUR_MONTH,opening_balance:val},'feed_id,site,year,month');
-    OPEN_BAL=await sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}`);
-    localStorage.setItem('open_bal',JSON.stringify(OPEN_BAL));
+    await sbUpsert('opening_balances',{feed_id:feedId,site:curSite,year:OB_YEAR,month:OB_MONTH,opening_balance:val},'feed_id,site,year,month');
+    await loadEditOpenBalances();
+    if(OB_YEAR===CUR_YEAR && OB_MONTH===CUR_MONTH){
+      OPEN_BAL=EDIT_OPEN_BAL;
+      localStorage.setItem('open_bal',JSON.stringify(OPEN_BAL));
+    }
     el.dataset.original=String(val);
     toast('✅ Остаток сохранён');
     render();
@@ -1401,10 +1433,10 @@ async function saveOneOB(feedId){
 }
 async function saveMN(){
   try{
-    for(const f of activeFeeds()){
+    for(const f of FEEDS.filter(x=>x.active!==false)){
       const val=parseFloat((document.getElementById('mn_'+f.id) ? document.getElementById('mn_'+f.id).value : 0))||0;
       await sbUpsert('monthly_needs',{feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:val},'feed_id,site,year,month');
-      const r=MONTHLY_NEEDS.find(x=>x.feed_id===f.id);
+      const r=MONTHLY_NEEDS.find(x=>x.feed_id===f.id&&x.site===curSite&&x.year===CUR_YEAR&&x.month===CUR_MONTH);
       if(r) r.per_month_t=val;
       else MONTHLY_NEEDS.push({feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:val});
     }
@@ -1548,12 +1580,11 @@ async function doAddFeed(){
     const id = 'f_'+name.toLowerCase().replace(/[^а-яa-z0-9]/gi,'_').slice(0,18)+'_'+Date.now();
     const sortOrder = FEEDS.length > 0 ? Math.max(...FEEDS.map(f=>f.sort_order||0))+1 : 0;
     await sbUpsert('feeds', {id, name, unit:'т', per_month_t:pm, sort_order:sortOrder, active:true});
-    // Set opening balance for both sites
-    for(const site of ['РУС','РОС']){
-      if(bal>0) await sbUpsert('opening_balances',{feed_id:id,site,year:CUR_YEAR,month:CUR_MONTH,opening_balance:bal},'feed_id,site,year,month');
-    }
+    await sbUpsert('monthly_needs',{feed_id:id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:pm},'feed_id,site,year,month');
+    if(bal>0) await sbUpsert('opening_balances',{feed_id:id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,opening_balance:bal},'feed_id,site,year,month');
     FEEDS = await sbGet('feeds','order=sort_order');
-    OPEN_BAL = await sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}`);
+    OPEN_BAL = await sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`);
+    MONTHLY_NEEDS = await sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`);
     localStorage.setItem('feeds',JSON.stringify(FEEDS));
     toast(`🌱 Добавлен: ${name}`);
     closeModal();
@@ -1612,7 +1643,7 @@ async function doAdjust(feedId){
       amount:newBal,
       note:`[КОРРЕКЦИЯ ОСТ.] ${note||'Ручная корректировка остатка на 1-е'}`
     });
-    OPEN_BAL = await sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}`);
+    OPEN_BAL = await sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`);
     localStorage.setItem('open_bal',JSON.stringify(OPEN_BAL));
     msg.innerHTML=`<div class="alert alert-ok">✅ Остаток → ${fmt(newBal)} т</div>`;
     toast('✅ Остаток сохранён');
