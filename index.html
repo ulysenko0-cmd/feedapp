@@ -806,14 +806,27 @@ async function loadAll(){
   localStorage.setItem('me', JSON.stringify(ME));
 }
 
-async function reloadDayData(){
+async function reloadDayData(includeStatic=false){
+  if (document.hidden) return;
   try {
-    DAY_DATA = await sbGet('day_records',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`);
-    LOGS     = await sbGet('intake_log',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}&order=created_at.desc&limit=100`);
-    MONTHLY_NEEDS = await sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`);
+    const [dayData, logs] = await Promise.all([
+      sbGet('day_records',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
+      sbGet('intake_log',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}&order=created_at.desc&limit=100`)
+    ]);
+    DAY_DATA = dayData || [];
+    LOGS = logs || [];
+    if (includeStatic) {
+      const [openBal, monthlyNeeds] = await Promise.all([
+        sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}`),
+        sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`)
+      ]);
+      OPEN_BAL = openBal || [];
+      MONTHLY_NEEDS = monthlyNeeds || [];
+      localStorage.setItem('open_bal',JSON.stringify(OPEN_BAL));
+      localStorage.setItem('monthly_needs',JSON.stringify(MONTHLY_NEEDS));
+    }
     localStorage.setItem('day_data',JSON.stringify(DAY_DATA));
     localStorage.setItem('logs',JSON.stringify(LOGS));
-    localStorage.setItem('monthly_needs',JSON.stringify(MONTHLY_NEEDS));
   } catch(e){}
 }
 
@@ -849,7 +862,7 @@ function setSite(s){
   if (!CAN.otherSite(ME && ME.role, ME && ME.site, s)) { toast('🔒 Нет доступа к этой площадке'); return; }
   curSite=s;
   document.querySelectorAll('.site-btn').forEach(b=>b.classList.toggle('on',b.dataset.s===s));
-  reloadDayData().then(render);
+  reloadDayData(true).then(render);
 }
 
 function render(){
@@ -1096,8 +1109,51 @@ function renderMonth(){
     ${siteToggleHtml()}
     <div class="sec">
       <div class="sec-head"><span class="ico">📅</span>${mnames[CUR_MONTH]} ${CUR_YEAR} &nbsp;<span style="font-size:9px;color:var(--muted2)">🟢 приход · серый = остаток</span></div>
+      <div style="padding:10px 12px 0;display:flex;justify-content:flex-end">
+        <button class="btn btn-gold btn-sm" style="width:auto;padding:8px 12px" onclick="downloadMonthReport()">Скачать Excel</button>
+      </div>
       <div class="month-wrap"><table class="tbl"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
     </div>`;
+}
+
+function monthReportRows(){
+  const dim=daysInMonth();
+  return FEEDS
+    .filter(f=>f.active!==false)
+    .map(f=>{
+      let intake=0, expense=0;
+      for(let d=1;d<=dim;d++){
+        const rec=getDayRec(f.id,d);
+        intake += Number(rec.intake||0);
+        expense += Number(rec.expense||0)>0 ? Number(rec.expense||0) : dailyNorm(f);
+      }
+      const opening=Number(getOpenBal(f.id)||0);
+      const ending=Math.max(0, opening + intake - expense);
+      return {name:f.name, opening, intake, expense, ending, need:monthlyNeed(f)};
+    })
+    .filter(r=>r.need>0 || r.opening>0 || r.intake>0 || r.expense>0 || r.ending>0);
+}
+
+function downloadMonthReport(){
+  if(!window.XLSX){toast('Excel не загрузился, обновите приложение');return;}
+  const monthNames=['','Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+  const rows=monthReportRows();
+  if(!rows.length){toast('Нет данных для отчета');return;}
+  const round=v=>Math.round(Number(v||0)*1000)/1000;
+  const aoa=[
+    ['Площадка', siteName(curSite)],
+    ['Месяц', `${monthNames[CUR_MONTH]} ${CUR_YEAR}`],
+    [],
+    ['Ингредиент','Остаток на начало месяца, т','Приход за месяц, т','Расход за месяц, т','Остаток на конец месяца, т']
+  ];
+  rows.forEach(r=>aoa.push([r.name, round(r.opening), round(r.intake), round(r.expense), round(r.ending)]));
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:34},{wch:24},{wch:18},{wch:18},{wch:26}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Движение');
+  const ym=`${CUR_YEAR}-${String(CUR_MONTH).padStart(2,'0')}`;
+  const site=siteName(curSite).replace(/[\\/:*?"<>|]/g,'_');
+  XLSX.writeFile(wb,`Движение кормов ${site} ${ym}.xlsx`);
 }
 
 // ============================================================
@@ -1513,7 +1569,12 @@ function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t
 // INIT
 // ============================================================
 loadAll();
-setInterval(()=>{reloadDayData().then(render);},60000);
+setInterval(()=>{
+  if(!document.hidden) reloadDayData().then(render);
+},300000);
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden) reloadDayData(true).then(render);
+});
 </script>
 </body>
 </html>
