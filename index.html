@@ -246,7 +246,7 @@ body::before {
 }
 .fc-val {
   font-family: var(--f-display);
-  font-size: 26px; font-weight: 900; line-height: 1;
+  font-size: 20px; font-weight: 900; line-height: 1;
   color: #3b2a16;
   text-shadow: 0 1px 0 rgba(255,255,255,.45);
 }
@@ -1764,7 +1764,7 @@ function closeModal(){
 // ============================================================
 // HELPERS
 // ============================================================
-function fmt(v,dec=3){if(!v||v===0)return'0';return(Math.round(v*1000)/1000).toFixed(dec).replace(/\.?0+$/,'');}
+function fmt(v,dec=2){const n=Number(v||0);return n.toFixed(dec);}
 function fmtTime(iso){if(!iso)return'';const d=new Date(iso);return`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 
