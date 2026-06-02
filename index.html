@@ -101,13 +101,13 @@ body::before {
   padding: 8px 4px 7px; gap: 3px;
   border: none; background: transparent;
   color: var(--muted); cursor: pointer;
-  font-size: 9px; font-weight: 800;
+  font-size: 8.5px; font-weight: 800;
   letter-spacing: .4px; text-transform: uppercase;
   font-family: var(--f-body);
   transition: color .2s;
   position: relative;
 }
-.bni .ico { font-size: 21px; line-height: 1; transition: transform .2s; }
+.bni .ico { font-size: 20px; line-height: 1; transition: transform .2s; }
 .bni.on { color: var(--gold); }
 .bni.on .ico { transform: scale(1.15); }
 .bni.on::after {
@@ -218,7 +218,7 @@ body::before {
 .cards-scroll::-webkit-scrollbar { display:none; }
 
 .fcard {
-  flex-shrink: 0; width: 148px; scroll-snap-align: start;
+  flex-shrink: 0; width: 156px; scroll-snap-align: start;
   background: linear-gradient(160deg, var(--s1) 0%, var(--s2) 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -246,11 +246,14 @@ body::before {
 }
 .fc-val {
   font-family: var(--f-display);
-  font-size: 20px; font-weight: 900; line-height: 1;
+  font-size: 18px; font-weight: 900; line-height: 1;
   color: #3b2a16;
   text-shadow: 0 1px 0 rgba(255,255,255,.45);
+  white-space: nowrap;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
 }
-.fc-unit { font-size: 11px; color: #4b351c; font-family: var(--f-body); font-weight: 800; }
+.fc-unit { font-size: 10px; color: #4b351c; font-family: var(--f-body); font-weight: 800; }
 .pbar { height: 4px; background: var(--s3); border-radius: 2px; margin-top: 8px; overflow:hidden; }
 .pbar-f { height:100%; border-radius:2px; background: linear-gradient(90deg, var(--lime), var(--gold)); transition: width .5s; }
 .pbar-f.warn { background: linear-gradient(90deg, var(--gold2), var(--red)); }
@@ -295,8 +298,9 @@ body::before {
 .tbl td { padding:8px 8px; border-bottom:1px solid rgba(58,78,39,.4); }
 .tbl tr:last-child td { border:none; }
 .tbl tr:nth-child(even) td { background: rgba(0,0,0,.06); }
-.tname { font-weight: 700; font-family: var(--f-body); }
-.mono { font-variant-numeric: tabular-nums; font-weight: 700; }
+.tname { font-weight: 700; font-family: var(--f-body); overflow-wrap:anywhere; }
+.mono { font-variant-numeric: tabular-nums; font-weight: 700; white-space:nowrap; }
+.tbl th:not(:first-child), .tbl td:not(:first-child) { text-align:right; }
 
 /* ---- FORM ---- */
 .form-group { margin-bottom: 14px; }
