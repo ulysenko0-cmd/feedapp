@@ -1037,8 +1037,7 @@ function renderIntake(){
   }
 
   let fopts=activeFeeds().map(f=>`<option value="${f.id}">${feedIco(f.name)} ${f.name}</option>`).join('');
-  let dopts='';
-  for(let d=1;d<=daysInMonth();d++) dopts+=`<option value="${d}" ${d===CUR_DAY?'selected':''}>${d}</option>`;
+  const intakeDateValue=`${CUR_YEAR}-${String(CUR_MONTH).padStart(2,'0')}-${String(CUR_DAY).padStart(2,'0')}`;
 
   const toggleHtml = ME && ME.role==='operator'
     ? `<div class="alert alert-info">📍 ${siteName(ME.site)}</div>`
@@ -1065,7 +1064,7 @@ function renderIntake(){
       <div class="sec-head"><span class="ico">🚛</span>Внести приход</div>
       <div class="sec-body">
         <div class="alert alert-info">👤 ${ME && ME.name ? ME.name : TG_NAME} &nbsp;·&nbsp; ${roleBadge(ME && ME.role)}</div>
-        <div class="form-group"><label>📅 Дата</label><select id="iDay">${dopts}</select></div>
+        <div class="form-group"><label>📅 Дата</label><input type="date" id="iDate" value="${intakeDateValue}"></div>
         <div class="form-group"><label>🌾 Корм</label><select id="iFeed">${fopts}</select></div>
         <div class="form-group"><label>⚖️ Количество (т)</label>
           <input type="number" id="iAmt" inputmode="decimal" placeholder="0.000" step="0.001" min="0"></div>
@@ -1083,7 +1082,10 @@ function renderIntake(){
 
 async function doIntake(){
   if (!CAN.intake(ME && ME.role)) { toast('🔒 Нет прав'); return; }
-  const day=parseInt(document.getElementById('iDay').value);
+  const dateVal=document.getElementById('iDate').value;
+  const dateParts=(dateVal||'').split('-').map(Number);
+  if(dateParts.length!==3 || !dateParts[0] || !dateParts[1] || !dateParts[2]){toast('Выберите дату');return;}
+  const intakeYear=dateParts[0], intakeMonth=dateParts[1], day=dateParts[2];
   const feedId=document.getElementById('iFeed').value;
   const amt=parseFloat(document.getElementById('iAmt').value);
   const note=document.getElementById('iNote').value.trim();
@@ -1092,10 +1094,11 @@ async function doIntake(){
   const feed=FEEDS.find(f=>f.id===feedId);
   msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> Сохранение...</div>`;
   try{
-    const existing=getDayRec(feedId,day);
-    await sbUpsert('day_records',{feed_id:feedId,site:curSite,year:CUR_YEAR,month:CUR_MONTH,day,intake:(existing.intake||0)+amt,expense:existing.expense||0},'feed_id,site,year,month,day');
-    await sbInsert('intake_log',{feed_id:feedId,feed_name:feed.name,site:curSite,year:CUR_YEAR,month:CUR_MONTH,day,user_name:ME && ME.name ? ME.name : TG_NAME,user_role:ME && ME.role,amount:amt,note});
-    await reloadDayData();
+    const found=await sbGet('day_records',`feed_id=eq.${feedId}&site=eq.${curSite}&year=eq.${intakeYear}&month=eq.${intakeMonth}&day=eq.${day}&limit=1`);
+    const existing=(found&&found[0])||{intake:0,expense:0};
+    await sbUpsert('day_records',{feed_id:feedId,site:curSite,year:intakeYear,month:intakeMonth,day,intake:(Number(existing.intake||0))+amt,expense:existing.expense||0},'feed_id,site,year,month,day');
+    await sbInsert('intake_log',{feed_id:feedId,feed_name:feed.name,site:curSite,year:intakeYear,month:intakeMonth,day,user_name:ME && ME.name ? ME.name : TG_NAME,user_role:ME && ME.role,amount:amt,note});
+    if(intakeYear===CUR_YEAR && intakeMonth===CUR_MONTH) await reloadDayData();
     document.getElementById('iAmt').value='';
     document.getElementById('iNote').value='';
     msg.innerHTML=`<div class="alert alert-ok">✅ ${fmt(amt)} т · ${feed.name}</div>`;
