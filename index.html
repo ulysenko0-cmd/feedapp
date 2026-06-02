@@ -722,6 +722,7 @@ let curPage = 'dash';
 let ME = null;
 
 let FEEDS=[], DAY_DATA=[], OPEN_BAL=[], EDIT_OPEN_BAL=[], LOGS=[], USERS=[], MONTHLY_NEEDS=[];
+let YEAR_DAY_DATA=[], YEAR_OPEN_BAL=[], YEAR_MONTHLY_NEEDS=[];
 let OB_YEAR=CUR_YEAR, OB_MONTH=CUR_MONTH;
 
 function daysInMonth(){ return new Date(CUR_YEAR,CUR_MONTH,0).getDate(); }
@@ -759,16 +760,63 @@ function setOBPeriod(v){
 function getDayRec(feedId,day){
   return DAY_DATA.find(x=>x.feed_id===feedId&&x.site===curSite&&x.year===CUR_YEAR&&x.month===CUR_MONTH&&x.day===day)||{intake:0,expense:0};
 }
+function getYearDayRec(feedId,year,month,day){
+  return YEAR_DAY_DATA.find(x=>x.feed_id===feedId&&x.site===curSite&&Number(x.year)===year&&Number(x.month)===month&&Number(x.day)===day)||{intake:0,expense:0};
+}
+function getYearOpenBal(feedId,year,month){
+  const r=YEAR_OPEN_BAL.find(x=>x.feed_id===feedId&&x.site===curSite&&Number(x.year)===year&&Number(x.month)===month);
+  return r && r.opening_balance ? Number(r.opening_balance) : 0;
+}
+function getYearMonthlyNeed(feed,year,month){
+  const r=YEAR_MONTHLY_NEEDS.find(x=>x.feed_id===feed.id&&x.site===curSite&&Number(x.year)===year&&Number(x.month)===month);
+  if(r) return Number(r.per_month_t||0);
+  if(year===CUR_YEAR&&month===CUR_MONTH) return monthlyNeed(feed);
+  return Number(feed.per_month_t||0);
+}
+function latestYearStart(feedId,year,month){
+  const candidates=YEAR_OPEN_BAL
+    .filter(x=>x.feed_id===feedId&&x.site===curSite&&(Number(x.year)<year||(Number(x.year)===year&&Number(x.month)<=month)))
+    .sort((a,b)=>Number(b.year)-Number(a.year)||Number(b.month)-Number(a.month));
+  return candidates[0] ? {year:Number(candidates[0].year),month:Number(candidates[0].month),balance:Number(candidates[0].opening_balance||0)} : {year,month,balance:0};
+}
 function balEnd(feedId,day){
   const f=FEEDS.find(x=>x.id===feedId); if(!f) return 0;
-  let bal=getOpenBal(feedId);
-  const norm=dailyNorm(f);
-  for(let d=1;d<=day;d++){
-    const rec=getDayRec(feedId,d);
-    bal+=(rec.intake||0);
-    bal-=(rec.expense>0?rec.expense:norm);
+  const start=latestYearStart(feedId,CUR_YEAR,CUR_MONTH);
+  let bal=start.balance;
+  for(let y=start.year, m=start.month; y<CUR_YEAR || (y===CUR_YEAR && m<=CUR_MONTH); ){
+    const firstDay=(y===start.year&&m===start.month)?1:1;
+    const lastDay=(y===CUR_YEAR&&m===CUR_MONTH)?day:new Date(y,m,0).getDate();
+    const need=getYearMonthlyNeed(f,y,m);
+    const norm=need/new Date(y,m,0).getDate();
+    for(let d=firstDay;d<=lastDay;d++){
+      const rec=getYearDayRec(feedId,y,m,d);
+      bal+=(Number(rec.intake||0));
+      bal-=(Number(rec.expense||0)>0?Number(rec.expense||0):norm);
+      if(rec.adjustment_balance!==undefined&&rec.adjustment_balance!==null&&rec.adjustment_balance!=='') bal=Number(rec.adjustment_balance);
+    }
+    m++;
+    if(m>12){m=1;y++;}
   }
-  return Math.max(0,bal);
+  return bal;
+}
+function balEndMonth(feedId,year,month,day){
+  const f=FEEDS.find(x=>x.id===feedId); if(!f) return 0;
+  const start=latestYearStart(feedId,year,month);
+  let bal=start.balance;
+  for(let y=start.year, m=start.month; y<year || (y===year && m<=month); ){
+    const lastDay=(y===year&&m===month)?day:new Date(y,m,0).getDate();
+    const need=getYearMonthlyNeed(f,y,m);
+    const norm=need/new Date(y,m,0).getDate();
+    for(let d=1;d<=lastDay;d++){
+      const rec=getYearDayRec(feedId,y,m,d);
+      bal+=Number(rec.intake||0);
+      bal-=(Number(rec.expense||0)>0?Number(rec.expense||0):norm);
+      if(rec.adjustment_balance!==undefined&&rec.adjustment_balance!==null&&rec.adjustment_balance!=='') bal=Number(rec.adjustment_balance);
+    }
+    m++;
+    if(m>12){m=1;y++;}
+  }
+  return bal;
 }
 function balStart(feedId,day){
   if(day<=1) return getOpenBal(feedId);
@@ -796,14 +844,18 @@ async function loadAll(){
     if (!ME.role) { showAccessDenied(); return; }
     if (ME.role==='operator') curSite = ME.site || 'РУС';
 
-    const [feeds, dayData, openBal, logs, monthlyNeeds] = await Promise.all([
+    const [feeds, dayData, openBal, logs, monthlyNeeds, yearDayData, yearOpenBal, yearMonthlyNeeds] = await Promise.all([
       sbGet('feeds','order=sort_order'),
       sbGet('day_records',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
       sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
       sbGet('intake_log',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}&order=created_at.desc&limit=100`),
-      sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`)
+      sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
+      sbGet('day_records',`year=eq.${CUR_YEAR}&site=eq.${curSite}`),
+      sbGet('opening_balances',`year=eq.${CUR_YEAR}&site=eq.${curSite}`),
+      sbGet('monthly_needs',`year=eq.${CUR_YEAR}&site=eq.${curSite}`)
     ]);
     FEEDS=feeds||[]; DAY_DATA=dayData||[]; OPEN_BAL=openBal||[]; EDIT_OPEN_BAL=OPEN_BAL; LOGS=logs||[]; MONTHLY_NEEDS=monthlyNeeds||[];
+    YEAR_DAY_DATA=yearDayData||[]; YEAR_OPEN_BAL=yearOpenBal||[]; YEAR_MONTHLY_NEEDS=yearMonthlyNeeds||[];
     if (ME.role==='admin') USERS = await sbGet('app_users','order=created_at');
 
     applyRoleUI();
@@ -816,6 +868,9 @@ async function loadAll(){
     EDIT_OPEN_BAL = OPEN_BAL;
     LOGS     = JSON.parse(localStorage.getItem('logs')||'[]');
     MONTHLY_NEEDS = JSON.parse(localStorage.getItem('monthly_needs')||'[]');
+    YEAR_DAY_DATA = JSON.parse(localStorage.getItem('year_day_data')||'[]');
+    YEAR_OPEN_BAL = JSON.parse(localStorage.getItem('year_open_bal')||'[]');
+    YEAR_MONTHLY_NEEDS = JSON.parse(localStorage.getItem('year_monthly_needs')||'[]');
     ME       = JSON.parse(localStorage.getItem('me')||'null');
     if (!ME) { showAccessDenied(); return; }
     applyRoleUI();
@@ -829,23 +884,32 @@ async function loadAll(){
 async function reloadDayData(includeStatic=false){
   if (document.hidden) return;
   try {
-    const [dayData, logs] = await Promise.all([
+    const [dayData, logs, yearDayData] = await Promise.all([
       sbGet('day_records',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
-      sbGet('intake_log',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}&order=created_at.desc&limit=100`)
+      sbGet('intake_log',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}&order=created_at.desc&limit=100`),
+      sbGet('day_records',`year=eq.${CUR_YEAR}&site=eq.${curSite}`)
     ]);
     DAY_DATA = dayData || [];
     LOGS = logs || [];
+    YEAR_DAY_DATA = yearDayData || [];
     if (includeStatic) {
-      const [openBal, monthlyNeeds] = await Promise.all([
+      const [openBal, monthlyNeeds, yearOpenBal, yearMonthlyNeeds] = await Promise.all([
         sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
-        sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`)
+        sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
+        sbGet('opening_balances',`year=eq.${CUR_YEAR}&site=eq.${curSite}`),
+        sbGet('monthly_needs',`year=eq.${CUR_YEAR}&site=eq.${curSite}`)
       ]);
       OPEN_BAL = openBal || [];
       MONTHLY_NEEDS = monthlyNeeds || [];
+      YEAR_OPEN_BAL = yearOpenBal || [];
+      YEAR_MONTHLY_NEEDS = yearMonthlyNeeds || [];
       localStorage.setItem('open_bal',JSON.stringify(OPEN_BAL));
       localStorage.setItem('monthly_needs',JSON.stringify(MONTHLY_NEEDS));
+      localStorage.setItem('year_open_bal',JSON.stringify(YEAR_OPEN_BAL));
+      localStorage.setItem('year_monthly_needs',JSON.stringify(YEAR_MONTHLY_NEEDS));
     }
     localStorage.setItem('day_data',JSON.stringify(DAY_DATA));
+    localStorage.setItem('year_day_data',JSON.stringify(YEAR_DAY_DATA));
     localStorage.setItem('logs',JSON.stringify(LOGS));
   } catch(e){}
 }
@@ -961,13 +1025,14 @@ function renderDash(){
     const balE=balEnd(f.id,selDay), rec=getDayRec(f.id,selDay), norm=dailyNorm(f);
     const exp=rec.expense>0?rec.expense:norm;
     const need=monthlyNeed(f);
-    const pct=need>0?Math.min(100,balE/need*100):100;
+    const pct=need>0?Math.max(0,Math.min(100,balE/need*100)):100;
     const dLeft=norm>0?Math.floor(balE/norm):99;
     const cls=dLeft<=3?'crit':dLeft<=7?'warn':'';
+    const balColor=balE<0?'var(--red)':'#3b2a16';
     return `<div class="fcard ${cls}">
       <span class="fcard-ico">${feedIco(f.name)}</span>
       <div class="fc-name">${f.name}</div>
-      <div class="fc-val">${fmt(balE)}<span class="fc-unit"> т</span></div>
+      <div class="fc-val" style="color:${balColor}">${fmt(balE)}<span class="fc-unit"> т</span></div>
       <div class="pbar"><div class="pbar-f ${cls}" style="width:${pct}%"></div></div>
       <div class="fc-sub">
         <span style="color:var(--lime)">▲${fmt(rec.intake||0)}</span>
@@ -980,11 +1045,12 @@ function renderDash(){
   // Summary table
   let trows=activeFeeds().map(f=>{
     const be=balEnd(f.id,selDay), rec=getDayRec(f.id,selDay), norm=dailyNorm(f), exp=rec.expense>0?rec.expense:norm;
+    const balColor=be<0?'var(--red)':'#3b2a16';
     return `<tr>
       <td class="tname">${feedIco(f.name)} ${f.name}</td>
       <td class="mono" style="color:var(--lime)">${fmt(rec.intake||0)}</td>
       <td class="mono" style="color:var(--red)">${fmt(exp)}</td>
-      <td class="mono" style="color:#3b2a16;font-weight:900">${fmt(be)}</td>
+      <td class="mono" style="color:${balColor};font-weight:900">${fmt(be)}</td>
     </tr>`;
   }).join('');
 
@@ -1098,7 +1164,7 @@ async function doIntake(){
     const existing=(found&&found[0])||{intake:0,expense:0};
     await sbUpsert('day_records',{feed_id:feedId,site:curSite,year:intakeYear,month:intakeMonth,day,intake:(Number(existing.intake||0))+amt,expense:existing.expense||0},'feed_id,site,year,month,day');
     await sbInsert('intake_log',{feed_id:feedId,feed_name:feed.name,site:curSite,year:intakeYear,month:intakeMonth,day,user_name:ME && ME.name ? ME.name : TG_NAME,user_role:ME && ME.role,amount:amt,note});
-    if(intakeYear===CUR_YEAR && intakeMonth===CUR_MONTH) await reloadDayData();
+    await reloadDayData(true);
     document.getElementById('iAmt').value='';
     document.getElementById('iNote').value='';
     msg.innerHTML=`<div class="alert alert-ok">✅ ${fmt(amt)} т · ${feed.name}</div>`;
@@ -1619,21 +1685,26 @@ async function doAddFeed(){
 }
 
 // ============================================================
-// MANUAL BALANCE ADJUSTMENT (корректировка остатка на 1-е число)
+// MANUAL BALANCE ADJUSTMENT (контрольная корректировка остатка на дату)
 // ============================================================
 function showAdjustModal(feedId){
   const f = FEEDS.find(x=>x.id===feedId);
   if(!f) return;
-  const curBal = getOpenBal(feedId);
+  const curBal = balEnd(feedId,selDay);
+  const adjDateValue=`${CUR_YEAR}-${String(CUR_MONTH).padStart(2,'0')}-${String(selDay).padStart(2,'0')}`;
 
   document.getElementById('modal-content').innerHTML=`
-    <div class="modal-title">✏️ Остаток на 1-е число</div>
+    <div class="modal-title">✏️ Корректировка остатка</div>
     <div class="alert alert-warn" style="font-size:12px">
       ${feedIco(f.name)} <b>${f.name}</b><br>
-      Текущий остаток: <b>${fmt(curBal)} т</b>
+      Расчетный остаток на выбранный день: <b>${fmt(curBal)} т</b>
     </div>
     <div class="form-group">
-      <label>⚖️ Фактический остаток на 1-е (т)</label>
+      <label>📅 Дата корректировки</label>
+      <input type="date" id="adj-date" value="${adjDateValue}">
+    </div>
+    <div class="form-group">
+      <label>⚖️ Фактический остаток на эту дату (т)</label>
       <input type="number" id="adj-val" value="${curBal}" step="0.001" min="0" inputmode="decimal">
     </div>
     <div class="form-group">
@@ -1647,30 +1718,38 @@ function showAdjustModal(feedId){
 }
 
 async function doAdjust(feedId){
+  const dateVal = document.getElementById('adj-date').value;
+  const dateParts=(dateVal||'').split('-').map(Number);
   const newBal = parseFloat(document.getElementById('adj-val').value);
   const note   = document.getElementById('adj-note').value.trim();
   const msg    = document.getElementById('adj-msg');
 
+  if(dateParts.length!==3 || !dateParts[0] || !dateParts[1] || !dateParts[2]){ msg.innerHTML=`<div class="alert alert-err">⚠️ Выберите дату</div>`; return; }
   if(isNaN(newBal)||newBal<0){ msg.innerHTML=`<div class="alert alert-err">⚠️ Введите корректное значение</div>`; return; }
   msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> Сохраняем...</div>`;
 
   try {
-    await sbUpsert('opening_balances',{
+    const adjYear=dateParts[0], adjMonth=dateParts[1], adjDay=dateParts[2];
+    const found=await sbGet('day_records',`feed_id=eq.${feedId}&site=eq.${curSite}&year=eq.${adjYear}&month=eq.${adjMonth}&day=eq.${adjDay}&limit=1`);
+    const existing=(found&&found[0])||{intake:0,expense:0};
+    await sbUpsert('day_records',{
       feed_id:feedId, site:curSite,
-      year:CUR_YEAR, month:CUR_MONTH,
-      opening_balance:newBal
-    },'feed_id,site,year,month');
-    // Log in intake_log as audit record
+      year:adjYear, month:adjMonth, day:adjDay,
+      intake:existing.intake||0,
+      expense:existing.expense||0,
+      adjustment_balance:newBal,
+      adjustment_note:note||'Ручная корректировка остатка',
+      adjusted_at:new Date().toISOString()
+    },'feed_id,site,year,month,day');
     const f = FEEDS.find(x=>x.id===feedId);
     await sbInsert('intake_log',{
       feed_id:feedId, feed_name:f.name, site:curSite,
-      year:CUR_YEAR, month:CUR_MONTH, day:1,
+      year:adjYear, month:adjMonth, day:adjDay,
       user_name:ME && ME.name ? ME.name : TG_NAME, user_role:'admin',
       amount:newBal,
-      note:`[КОРРЕКЦИЯ ОСТ.] ${note||'Ручная корректировка остатка на 1-е'}`
+      note:`[КОРРЕКЦИЯ ОСТ.] ${note||'Ручная корректировка остатка'}`
     });
-    OPEN_BAL = await sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`);
-    localStorage.setItem('open_bal',JSON.stringify(OPEN_BAL));
+    await reloadDayData(true);
     msg.innerHTML=`<div class="alert alert-ok">✅ Остаток → ${fmt(newBal)} т</div>`;
     toast('✅ Остаток сохранён');
     setTimeout(()=>closeModal(), 1400);
