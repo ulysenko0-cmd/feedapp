@@ -834,6 +834,26 @@ function balStart(feedId,day){
 // ============================================================
 async function loadAll(){
   try {
+    // Сразу показываем кэш из localStorage пока грузятся свежие данные
+    const cachedMe = JSON.parse(localStorage.getItem('me')||'null');
+    if (cachedMe) {
+      ME = cachedMe;
+      FEEDS    = JSON.parse(localStorage.getItem('feeds')||'[]');
+      DAY_DATA = JSON.parse(localStorage.getItem('day_data')||'[]');
+      OPEN_BAL = JSON.parse(localStorage.getItem('open_bal')||'[]');
+      EDIT_OPEN_BAL = OPEN_BAL;
+      LOGS     = JSON.parse(localStorage.getItem('logs')||'[]');
+      MONTHLY_NEEDS = JSON.parse(localStorage.getItem('monthly_needs')||'[]');
+      YEAR_DAY_DATA = JSON.parse(localStorage.getItem('year_day_data')||'[]');
+      YEAR_OPEN_BAL = JSON.parse(localStorage.getItem('year_open_bal')||'[]');
+      YEAR_MONTHLY_NEEDS = JSON.parse(localStorage.getItem('year_monthly_needs')||'[]');
+      if (ME.role==='operator') curSite = ME.site || 'РУС';
+      applyRoleUI();
+      document.getElementById('loader').style.display='none';
+      render();
+    }
+
+    // Загружаем свежие данные параллельно с проверкой пользователя
     let users = await sbGet('app_users', `tg_id=eq.${TG_ID}`);
     if (!users || users.length === 0) {
       const allUsers = await sbGet('app_users','select=tg_id&limit=5');
@@ -850,7 +870,8 @@ async function loadAll(){
     if (!ME.role) { showAccessDenied(); return; }
     if (ME.role==='operator') curSite = ME.site || 'РУС';
 
-    const [feeds, dayData, openBal, logs, monthlyNeeds, yearDayData, yearOpenBal, yearMonthlyNeeds] = await Promise.all([
+    // Все основные данные — одним параллельным пакетом
+    const [feeds, dayData, openBal, logs, monthlyNeeds, yearDayData, yearOpenBal, yearMonthlyNeeds, allUsers2] = await Promise.all([
       sbGet('feeds','order=sort_order'),
       sbGet('day_records',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
       sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
@@ -858,22 +879,20 @@ async function loadAll(){
       sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
       sbGet('day_records',`year=eq.${CUR_YEAR}&site=eq.${curSite}`),
       sbGet('opening_balances',`year=eq.${CUR_YEAR}&site=eq.${curSite}`),
-      sbGet('monthly_needs',`year=eq.${CUR_YEAR}&site=eq.${curSite}`)
+      sbGet('monthly_needs',`year=eq.${CUR_YEAR}&site=eq.${curSite}`),
+      ME.role==='admin' ? sbGet('app_users','order=created_at') : Promise.resolve(null)
     ]);
     FEEDS=feeds||[]; DAY_DATA=dayData||[]; OPEN_BAL=openBal||[]; EDIT_OPEN_BAL=OPEN_BAL; LOGS=logs||[]; MONTHLY_NEEDS=monthlyNeeds||[];
     YEAR_DAY_DATA=yearDayData||[]; YEAR_OPEN_BAL=yearOpenBal||[]; YEAR_MONTHLY_NEEDS=yearMonthlyNeeds||[];
-    if (ME.role==='admin') USERS = await sbGet('app_users','order=created_at');
+    if (allUsers2) USERS = allUsers2;
 
-    // Автоперенос остатков и потребностей на начало нового месяца
+    // Автоперенос: обе площадки параллельно
     if (ME.role === 'admin') {
-      const sites = ['РУС', 'РОС'];
-      let rolled = false;
-      for (const s of sites) {
-        const did = await autoRolloverIfNeeded(s);
-        if (did) rolled = true;
-      }
-      if (rolled) {
-        // Перезагружаем все данные после переноса (включая годовые)
+      const [rolledRUS, rolledROS] = await Promise.all([
+        autoRolloverIfNeeded('РУС'),
+        autoRolloverIfNeeded('РОС')
+      ]);
+      if (rolledRUS || rolledROS) {
         [OPEN_BAL, MONTHLY_NEEDS, YEAR_OPEN_BAL, YEAR_MONTHLY_NEEDS] = await Promise.all([
           sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
           sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
@@ -884,6 +903,17 @@ async function loadAll(){
         toast('✅ Остатки на 1-е число перенесены из прошлого месяца');
       }
     }
+
+    // Обновляем localStorage свежими данными
+    localStorage.setItem('me', JSON.stringify(ME));
+    localStorage.setItem('feeds', JSON.stringify(FEEDS));
+    localStorage.setItem('day_data', JSON.stringify(DAY_DATA));
+    localStorage.setItem('open_bal', JSON.stringify(OPEN_BAL));
+    localStorage.setItem('logs', JSON.stringify(LOGS));
+    localStorage.setItem('monthly_needs', JSON.stringify(MONTHLY_NEEDS));
+    localStorage.setItem('year_day_data', JSON.stringify(YEAR_DAY_DATA));
+    localStorage.setItem('year_open_bal', JSON.stringify(YEAR_OPEN_BAL));
+    localStorage.setItem('year_monthly_needs', JSON.stringify(YEAR_MONTHLY_NEEDS));
 
     applyRoleUI();
     document.getElementById('loader').style.display='none';
@@ -953,56 +983,46 @@ function showAccessDenied(){
 // ============================================================
 async function autoRolloverIfNeeded(site) {
   const existing = await sbGet('opening_balances', `year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${site}&limit=1`);
-  if (existing.length > 0) return false; // уже есть — не трогаем
+  if (existing.length > 0) return false;
 
   let prevYear = CUR_YEAR, prevMonth = CUR_MONTH - 1;
   if (prevMonth < 1) { prevMonth = 12; prevYear--; }
 
-  const [prevOpenBal, prevDayRecords, prevNeeds, prevFeeds] = await Promise.all([
+  const [prevOpenBal, prevDayRecords, prevNeeds, prevFeeds, existingNeeds] = await Promise.all([
     sbGet('opening_balances', `year=eq.${prevYear}&month=eq.${prevMonth}&site=eq.${site}`),
     sbGet('day_records', `year=eq.${prevYear}&month=eq.${prevMonth}&site=eq.${site}`),
     sbGet('monthly_needs', `year=eq.${prevYear}&month=eq.${prevMonth}&site=eq.${site}`),
-    sbGet('feeds', 'select=id,name,active&active=is.true&order=sort_order')
+    sbGet('feeds', 'select=id,name,active&active=is.true&order=sort_order'),
+    sbGet('monthly_needs', `year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${site}&limit=1`)
   ]);
 
   if (!prevOpenBal.length && !prevDayRecords.length) return false;
 
   const daysInPrev = new Date(prevYear, prevMonth, 0).getDate();
-  const rows = [];
+  const obRows = [];
 
   for (const feed of prevFeeds) {
     const openBal   = Number((prevOpenBal.find(x => x.feed_id === feed.id) || {}).opening_balance || 0);
     const need      = Number((prevNeeds.find(x => x.feed_id === feed.id) || {}).per_month_t || 0);
     const dailyNorm = daysInPrev > 0 ? need / daysInPrev : 0;
-
     let balance = openBal;
     for (let d = 1; d <= daysInPrev; d++) {
       const rec = prevDayRecords.find(x => x.feed_id === feed.id && Number(x.day) === d);
-      const intake  = Number((rec || {}).intake  || 0);
-      const expense = Number((rec || {}).expense || 0);
-      balance += intake;
-      balance -= expense > 0 ? expense : dailyNorm;
-      if (rec && rec.adjustment_balance !== null && rec.adjustment_balance !== undefined) {
+      balance += Number((rec || {}).intake  || 0);
+      balance -= Number((rec || {}).expense || 0) > 0 ? Number(rec.expense) : dailyNorm;
+      if (rec && rec.adjustment_balance !== null && rec.adjustment_balance !== undefined)
         balance = Number(rec.adjustment_balance);
-      }
     }
-
-    const rounded = Math.round(balance * 1000) / 1000;
-    rows.push({ feed_id: feed.id, site, year: CUR_YEAR, month: CUR_MONTH, opening_balance: rounded });
+    obRows.push({ feed_id: feed.id, site, year: CUR_YEAR, month: CUR_MONTH, opening_balance: Math.round(balance * 1000) / 1000 });
   }
 
-  // Копируем потребность, если её нет за текущий месяц
-  const existingNeeds = await sbGet('monthly_needs', `year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${site}&limit=1`);
+  // Один запрос для всех остатков + один для всех потребностей
+  const saves = [sbUpsert('opening_balances', obRows, 'feed_id,site,year,month')];
   if (!existingNeeds.length && prevNeeds.length) {
-    for (const n of prevNeeds) {
-      await sbUpsert('monthly_needs', { feed_id: n.feed_id, site, year: CUR_YEAR, month: CUR_MONTH, per_month_t: n.per_month_t }, 'feed_id,site,year,month');
-    }
+    const mnRows = prevNeeds.map(n => ({ feed_id: n.feed_id, site, year: CUR_YEAR, month: CUR_MONTH, per_month_t: n.per_month_t }));
+    saves.push(sbUpsert('monthly_needs', mnRows, 'feed_id,site,year,month'));
   }
-
-  for (const row of rows) {
-    await sbUpsert('opening_balances', row, 'feed_id,site,year,month');
-  }
-
+  await Promise.all(saves);
   return true;
 }
 
@@ -1746,36 +1766,4 @@ async function toggleFeedForSite(feedId, active){
     if (active) {
       toast(`✅ ${f?f.name:feedId} включён для ${siteName(curSite)} — проверьте потребность`);
     } else {
-      toast(`⛔ ${f?f.name:feedId} выключен для ${siteName(curSite)}`);
-    }
-    renderSettings();
-  } catch(e) { toast('❌ '+e.message); }
-}
-
-// ============================================================
-// FEED ARCHIVE — GLOBAL (скрыть/восстановить на ВСЕХ площадках, только admin)
-// ============================================================
-async function archiveFeedGlobal(feedId, feedName, isCurrentlyArchived){
-  if (!isCurrentlyArchived) {
-    if (!confirm(`🗄️ Архивировать «${feedName}»?\n\nКорм скроется на ВСЕХ площадках у всех пользователей.\nДанные сохранятся — можно будет восстановить.`)) return;
-  }
-  const newActive = isCurrentlyArchived; // восстановить = true, архивировать = false
-  try {
-    await sbPatch('feeds', `id=eq.${feedId}`, {active: newActive});
-    const f = FEEDS.find(x=>x.id===feedId);
-    if(f) f.active = newActive;
-    localStorage.setItem('feeds', JSON.stringify(FEEDS));
-    toast(newActive ? `♻️ ${feedName} восстановлен` : `🗄️ ${feedName} архивирован (все площадки)`);
-    renderSettings();
-  } catch(e) { toast('❌ '+e.message); }
-}
-
-// ============================================================
-// ADD NEW FEED (добавить новый ингредиент)
-// ============================================================
-function showAddFeedModal(){
-  document.getElementById('modal-content').innerHTML=`
-    <div class="modal-title">🌱 Новый ингредиент</div>
-    <div class="form-group">
-      <label>Название</label>
-      <in
+      toast(`⛔ ${f?f.name:feedId} выключен для 
