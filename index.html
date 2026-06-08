@@ -1769,4 +1769,175 @@ async function applyXLS(jsonStr){
     msg.innerHTML=`<div class="alert alert-ok">✅ Применено ${newFeeds.length} кормов</div>`;
     toast('🌾 Корма обновлены');
     renderSettings();
-  }catch(e){msg.innerHTML=`<div class="alert alert-err">❌ Оши
+  }catch(e){msg.innerHTML=`<div class="alert alert-err">❌ Ошибка: ${e.message}</div>`;}
+}
+// ============================================================
+// FEED TOGGLE — PER-SITE (вкл/выкл для текущей площадки)
+// ============================================================
+async function toggleFeedForSite(feedId, active){
+  // Меняет monthly_needs только для curSite — другие площадки не затрагивает.
+  // Выключенные корма (per_month_t=0) видит только admin в настройках.
+  const f = FEEDS.find(x=>x.id===feedId);
+  try {
+    let newVal = 0;
+    if (active) {
+      // При включении — восстанавливаем из глобального per_month_t или ставим 1 как заглушку
+      newVal = Number(f && f.per_month_t || 0) || 1;
+    }
+    await sbUpsert('monthly_needs',
+      {feed_id: feedId, site: curSite, year: CUR_YEAR, month: CUR_MONTH, per_month_t: newVal},
+      'feed_id,site,year,month'
+    );
+    // Обновляем локальный кэш
+    const r = MONTHLY_NEEDS.find(x=>x.feed_id===feedId&&x.site===curSite&&x.year===CUR_YEAR&&x.month===CUR_MONTH);
+    if (r) r.per_month_t = newVal;
+    else MONTHLY_NEEDS.push({feed_id:feedId, site:curSite, year:CUR_YEAR, month:CUR_MONTH, per_month_t:newVal});
+    localStorage.setItem('monthly_needs', JSON.stringify(MONTHLY_NEEDS));
+    if (active) {
+      toast(`✅ ${f?f.name:feedId} включён для ${siteName(curSite)} — проверьте потребность`);
+    } else {
+      toast(`⛔ ${f?f.name:feedId} выключен для ${siteName(curSite)}`);
+    }
+    renderSettings();
+  } catch(e) { toast('❌ '+e.message); }
+}
+
+// ============================================================
+// FEED ARCHIVE — GLOBAL (скрыть/восстановить на ВСЕХ площадках, только admin)
+// ============================================================
+async function archiveFeedGlobal(feedId, feedName, isCurrentlyArchived){
+  if (!isCurrentlyArchived) {
+    if (!confirm(`🗄️ Архивировать «${feedName}»?\n\nКорм скроется на ВСЕХ площадках у всех пользователей.\nДанные сохранятся — можно будет восстановить.`)) return;
+  }
+  const newActive = isCurrentlyArchived; // восстановить = true, архивировать = false
+  try {
+    await sbPatch('feeds', `id=eq.${feedId}`, {active: newActive});
+    const f = FEEDS.find(x=>x.id===feedId);
+    if(f) f.active = newActive;
+    localStorage.setItem('feeds', JSON.stringify(FEEDS));
+    toast(newActive ? `♻️ ${feedName} восстановлен` : `🗄️ ${feedName} архивирован (все площадки)`);
+    renderSettings();
+  } catch(e) { toast('❌ '+e.message); }
+}
+
+// ============================================================
+// FEED TOGGLE — PER-SITE
+// ============================================================
+async function toggleFeedForSite(feedId, active){
+  const f = FEEDS.find(x=>x.id===feedId);
+  try {
+    const newVal = active ? (Number(f&&f.per_month_t||0)||1) : 0;
+    await sbUpsert('monthly_needs',{feed_id:feedId,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:newVal},'feed_id,site,year,month');
+    const r=MONTHLY_NEEDS.find(x=>x.feed_id===feedId&&x.site===curSite&&x.year===CUR_YEAR&&x.month===CUR_MONTH);
+    if(r) r.per_month_t=newVal; else MONTHLY_NEEDS.push({feed_id:feedId,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:newVal});
+    localStorage.setItem('monthly_needs',JSON.stringify(MONTHLY_NEEDS));
+    toast(active ? `✅ ${f?f.name:feedId} включён для ${siteName(curSite)}` : `⛔ ${f?f.name:feedId} выключен для ${siteName(curSite)}`);
+    renderSettings();
+  } catch(e){ toast('❌ '+e.message); }
+}
+
+async function archiveFeedGlobal(feedId, feedName, isCurrentlyArchived){
+  if(!isCurrentlyArchived && !confirm(`🗄️ Архивировать «${feedName}»?
+
+Корм скроется на всех площадках.`)) return;
+  try {
+    await sbPatch('feeds',`id=eq.${feedId}`,{active:isCurrentlyArchived});
+    const f=FEEDS.find(x=>x.id===feedId); if(f) f.active=isCurrentlyArchived;
+    localStorage.setItem('feeds',JSON.stringify(FEEDS));
+    toast(isCurrentlyArchived ? `♻️ ${feedName} восстановлен` : `🗄️ ${feedName} архивирован`);
+    renderSettings();
+  } catch(e){ toast('❌ '+e.message); }
+}
+
+// ============================================================
+// ADD NEW FEED
+// ============================================================
+function showAddFeedModal(){
+  document.getElementById('modal-content').innerHTML=`
+    <div class="modal-title">🌱 Новый ингредиент</div>
+    <div class="form-group"><label>Название</label>
+      <input type="text" id="nf-name" placeholder="Например: Жмых льняной" autofocus></div>
+    <div class="form-group"><label>Потребность в месяц (т)</label>
+      <input type="number" id="nf-month" placeholder="0.000" step="0.001" min="0" inputmode="decimal"></div>
+    <div class="form-group"><label>Остаток на сегодня (т)</label>
+      <input type="number" id="nf-bal" placeholder="0.000" step="0.001" min="0" inputmode="decimal"></div>
+    <div id="nf-msg"></div>
+    <button class="btn btn-gold" onclick="doAddFeed()" style="margin-bottom:8px">✅ Добавить</button>
+    <button class="btn btn-ghost" onclick="closeModal()">Отмена</button>`;
+  document.getElementById('modal-bg').classList.add('show');
+}
+
+async function doAddFeed(){
+  const name=document.getElementById('nf-name').value.trim();
+  const pm=parseFloat(document.getElementById('nf-month').value)||0;
+  const bal=parseFloat(document.getElementById('nf-bal').value)||0;
+  const msg=document.getElementById('nf-msg');
+  if(!name){msg.innerHTML=`<div class="alert alert-err">⚠️ Введите название</div>`;return;}
+  msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> Сохраняем...</div>`;
+  try {
+    const existing=findExistingFeedByName(name);
+    const id=existing?existing.id:'f_'+normFeedName(name).replace(/[^\u0430-\u044fa-z0-9]/gi,'_').slice(0,18)+'_'+Date.now();
+    const sortOrder=FEEDS.length>0?Math.max(...FEEDS.map(f=>f.sort_order||0))+1:0;
+    await sbUpsert('feeds',{id,name:existing?existing.name:name,unit:'\u0442',per_month_t:pm,sort_order:existing?existing.sort_order:sortOrder,active:true});
+    await sbUpsert('monthly_needs',{feed_id:id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:pm},'feed_id,site,year,month');
+    if(bal>0) await sbUpsert('opening_balances',{feed_id:id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,opening_balance:bal},'feed_id,site,year,month');
+    FEEDS=await sbGet('feeds','order=sort_order');
+    OPEN_BAL=await sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`);
+    MONTHLY_NEEDS=await sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`);
+    localStorage.setItem('feeds',JSON.stringify(FEEDS));
+    closeModal(); renderSettings();
+  } catch(e){msg.innerHTML=`<div class="alert alert-err">❌ ${e.message}</div>`;}
+}
+
+// ============================================================
+// ADJUST BALANCE
+// ============================================================
+function showAdjustModal(feedId){
+  const f=FEEDS.find(x=>x.id===feedId); if(!f) return;
+  const curBal=balEnd(f.id,selDay);
+  document.getElementById('modal-content').innerHTML=`
+    <div class="modal-title">✏️ Корректировка остатка</div>
+    <div class="alert alert-warn" style="font-size:12px">${feedIco(f.name)} <b>${f.name}</b><br>Расчётный остаток: <b>${fmt(curBal)} т</b></div>
+    <div class="form-group"><label>Фактический остаток (т)</label>
+      <input type="number" id="adj-val" value="${fmt(curBal)}" step="0.001" min="0" inputmode="decimal"></div>
+    <div class="form-group"><label>Причина</label>
+      <input type="text" id="adj-note" placeholder="Инвентаризация, пересчёт..."></div>
+    <div id="adj-msg"></div>
+    <button class="btn btn-gold" onclick="doAdjust('${feedId}')" style="margin-bottom:8px">💾 Сохранить</button>
+    <button class="btn btn-ghost" onclick="closeModal()">Отмена</button>`;
+  document.getElementById('modal-bg').classList.add('show');
+}
+
+async function doAdjust(feedId){
+  const val=parseFloat(document.getElementById('adj-val').value);
+  const note=document.getElementById('adj-note').value.trim();
+  const msg=document.getElementById('adj-msg');
+  if(isNaN(val)||val<0){msg.innerHTML=`<div class="alert alert-err">⚠️ Введите значение</div>`;return;}
+  msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> Сохраняем...</div>`;
+  try {
+    const rec=getDayRec(feedId,selDay);
+    await sbUpsert('day_records',{feed_id:feedId,site:curSite,year:CUR_YEAR,month:CUR_MONTH,day:selDay,
+      intake:rec.intake||0,expense:rec.expense||0,adjustment_balance:val},'feed_id,site,year,month,day');
+    await reloadDayData(true);
+    toast('✅ Остаток скорректирован');
+    closeModal(); render();
+  } catch(e){msg.innerHTML=`<div class="alert alert-err">❌ ${e.message}</div>`;}
+}
+
+function closeModal(){document.getElementById('modal-bg').classList.remove('show');}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function fmt(v){if(v===undefined||v===null||v==='')return'0';const n=Math.round(Number(v)*1000)/1000;return String(n);}
+function fmtTime(iso){if(!iso)return'';const d=new Date(iso);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+function toast(msg){const t=document.getElementById('toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
+
+// ============================================================
+// INIT
+// ============================================================
+loadAll();
+setInterval(()=>{if(!document.hidden)reloadDayData().then(render);},60000);
+</script>
+</body>
+</html>
