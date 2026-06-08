@@ -679,41 +679,35 @@ const CAN = {
 // ============================================================
 // SUPABASE
 // ============================================================
-function sbFetch(url, opts={}, timeout=15000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
-  return fetch(url, { ...opts, signal: controller.signal })
-    .finally(() => clearTimeout(timer));
-}
 async function sbGet(table, filter='') {
-  const r = await sbFetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
     headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
-  }, 15000);
+  });
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 async function sbUpsert(table, data, onConflict='') {
   const conflict = onConflict ? `?on_conflict=${onConflict}` : '';
-  const r = await sbFetch(`${SUPABASE_URL}/rest/v1/${table}${conflict}`, {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}${conflict}`, {
     method:'POST',
     headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
     body:JSON.stringify(data)
-  }, 20000);
+  });
   if (!r.ok) throw new Error(await r.text());
 }
 async function sbInsert(table, data) {
-  const r = await sbFetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
     method:'POST',
     headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},
     body:JSON.stringify(data)
-  }, 20000);
+  });
   if (!r.ok) throw new Error(await r.text());
 }
 async function sbDelete(table, filter) {
-  const r = await sbFetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
     method:'DELETE',
     headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Prefer':'return=minimal'}
-  }, 20000);
+  });
   if (!r.ok) throw new Error(await r.text());
 }
 async function sbPatch(table, filter, data) {
