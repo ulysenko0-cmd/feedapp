@@ -517,6 +517,7 @@ input[type=number] { font-variant-numeric: tabular-nums; }
 /* ---- SPINNER for saving ---- */
 .spin { display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,.2); border-top-color:currentColor; border-radius:50%; animation:sp .6s linear infinite; }
 @keyframes sp { to { transform:rotate(360deg); } }
+@keyframes spin { to { transform:rotate(360deg); } }
 
 /* ---- TOGGLE SWITCH ---- */
 .toggle-row {
@@ -1058,6 +1059,34 @@ function setSite(s){
   reloadDayData(true).then(()=>loadEditOpenBalances()).then(render);
 }
 
+async function refreshData(){
+  const btn = document.getElementById('refresh-btn');
+  if(btn) btn.style.animation='spin .6s linear infinite';
+  try {
+    const [dayData, openBal, logs, monthlyNeeds, yearDayData, yearOpenBal, yearMonthlyNeeds] = await Promise.all([
+      sbGet('day_records',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
+      sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
+      sbGet('intake_log',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}&order=created_at.desc&limit=100`),
+      sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
+      sbGet('day_records',`year=eq.${CUR_YEAR}&site=eq.${curSite}`),
+      sbGet('opening_balances',`year=eq.${CUR_YEAR}&site=eq.${curSite}`),
+      sbGet('monthly_needs',`year=eq.${CUR_YEAR}&site=eq.${curSite}`)
+    ]);
+    DAY_DATA=dayData||[]; OPEN_BAL=openBal||[]; EDIT_OPEN_BAL=OPEN_BAL;
+    LOGS=logs||[]; MONTHLY_NEEDS=monthlyNeeds||[];
+    YEAR_DAY_DATA=yearDayData||[]; YEAR_OPEN_BAL=yearOpenBal||[]; YEAR_MONTHLY_NEEDS=yearMonthlyNeeds||[];
+    localStorage.setItem('day_data',JSON.stringify(DAY_DATA));
+    localStorage.setItem('open_bal',JSON.stringify(OPEN_BAL));
+    localStorage.setItem('logs',JSON.stringify(LOGS));
+    localStorage.setItem('monthly_needs',JSON.stringify(MONTHLY_NEEDS));
+    render();
+    toast('✅ Данные обновлены');
+  } catch(e) {
+    toast('❌ Ошибка обновления: '+e.message);
+  }
+  if(btn) btn.style.animation='';
+}
+
 function render(){
   if(curPage==='dash')     renderDash();
   if(curPage==='intake')   renderIntake();
@@ -1097,7 +1126,10 @@ function renderDash(){
   const hero = `<div class="hero">
     <div class="hero-top">
       <div class="hero-title">🌾 Движение кормов</div>
-      <div class="hero-user">${roleBadge(ME && ME.role)}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button id="refresh-btn" onclick="refreshData()" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px;line-height:1" title="Обновить данные">🔄</button>
+        ${roleBadge(ME && ME.role)}
+      </div>
     </div>
     <div style="font-size:12px;color:var(--muted);font-weight:700">${ME && ME.name ? ME.name : TG_NAME} · ${siteName(curSite)}</div>
   </div>`;
