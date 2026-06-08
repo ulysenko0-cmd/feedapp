@@ -679,34 +679,41 @@ const CAN = {
 // ============================================================
 // SUPABASE
 // ============================================================
-function sbFetch(url, opts={}) {
+function sbFetch(url, opts={}, timeout=15000) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12000); // 12 сек таймаут
+  const timer = setTimeout(() => controller.abort(), timeout);
   return fetch(url, { ...opts, signal: controller.signal })
     .finally(() => clearTimeout(timer));
 }
 async function sbGet(table, filter='') {
   const r = await sbFetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
     headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
-  });
+  }, 15000);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 async function sbUpsert(table, data, onConflict='') {
   const conflict = onConflict ? `?on_conflict=${onConflict}` : '';
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}${conflict}`, {
+  const r = await sbFetch(`${SUPABASE_URL}/rest/v1/${table}${conflict}`, {
     method:'POST',
     headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
     body:JSON.stringify(data)
-  });
+  }, 20000);
   if (!r.ok) throw new Error(await r.text());
 }
 async function sbInsert(table, data) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+  const r = await sbFetch(`${SUPABASE_URL}/rest/v1/${table}`, {
     method:'POST',
     headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},
     body:JSON.stringify(data)
-  });
+  }, 20000);
+  if (!r.ok) throw new Error(await r.text());
+}
+async function sbDelete(table, filter) {
+  const r = await sbFetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
+    method:'DELETE',
+    headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Prefer':'return=minimal'}
+  }, 20000);
   if (!r.ok) throw new Error(await r.text());
 }
 async function sbPatch(table, filter, data) {
@@ -1234,7 +1241,8 @@ function renderIntake(){
     ? `<div class="alert alert-info">📍 ${siteName(ME.site)}</div>`
     : siteToggleHtml();
 
-  const recLogs=LOGS.slice(0,30);
+  const canEdit = CAN.intake(ME && ME.role);
+  const recLogs=LOGS.slice(0,50);
   let logHtml=recLogs.length?recLogs.map(l=>`
     <div class="log-item">
       <div class="log-ico">${feedIco(l.feed_name||'')}</div>
@@ -1242,9 +1250,13 @@ function renderIntake(){
         <div class="log-name">${l.feed_name||'—'}</div>
         <div class="log-meta">${l.day} · ${l.user_name}${l.note?` · ${l.note}`:''}</div>
       </div>
-      <div style="text-align:right">
-        <div class="log-amt">+${fmt(l.amount)}</div>
-        <div class="log-time">т · ${fmtTime(l.created_at)}</div>
+      <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <div class="log-amt">+${fmt(l.amount)} т</div>
+        <div class="log-time">${fmtTime(l.created_at)}</div>
+        ${canEdit?`<div style="display:flex;gap:4px;margin-top:2px">
+          <button onclick="editIntakeModal(${JSON.stringify(l).replace(/"/g,'&quot;')})" style="background:var(--sky-d);border:1px solid rgba(91,191,255,.3);color:var(--sky);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer">✏️</button>
+          <button onclick="deleteIntake('${l.id}','${l.feed_id}',${l.amount},${l.day},${l.month},${l.year})" style="background:var(--red-d);border:1px solid rgba(232,64,42,.3);color:var(--red);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer">🗑</button>
+        </div>`:''}
       </div>
     </div>`).join('')
   :`<div style="text-align:center;color:var(--muted);padding:20px;font-size:13px">🌿 Нет приходов</div>`;
@@ -1297,6 +1309,61 @@ async function doIntake(){
     toast('✅ Приход сохранён');
     if(tg)tg.HapticFeedback && tg.HapticFeedback.notificationOccurred('success');
   }catch(e){msg.innerHTML=`<div class="alert alert-err">❌ Ошибка: ${e.message}</div>`;}
+}
+
+// ============================================================
+// EDIT / DELETE INTAKE
+// ============================================================
+function editIntakeModal(log){
+  document.getElementById('modal-content').innerHTML=`
+    <div class="modal-title">✏️ Изменить приход</div>
+    <div class="alert alert-info" style="font-size:12px">${feedIco(log.feed_name||'')} <b>${log.feed_name}</b> · ${log.day}.${log.month}.${log.year}</div>
+    <div class="form-group"><label>⚖️ Количество (т)</label>
+      <input type="number" id="ei-amt" value="${log.amount}" step="0.001" min="0" inputmode="decimal"></div>
+    <div class="form-group"><label>📋 Примечание</label>
+      <input type="text" id="ei-note" value="${log.note||''}"></div>
+    <div id="ei-msg"></div>
+    <button class="btn btn-gold" onclick="doEditIntake('${log.id}','${log.feed_id}',${log.amount},${log.day},${log.month},${log.year})" style="margin-bottom:8px">💾 Сохранить</button>
+    <button class="btn btn-ghost" onclick="closeModal()">Отмена</button>`;
+  document.getElementById('modal-bg').classList.add('show');
+}
+
+async function doEditIntake(logId, feedId, oldAmt, day, month, year){
+  const newAmt = parseFloat(document.getElementById('ei-amt').value);
+  const note   = document.getElementById('ei-note').value.trim();
+  const msg    = document.getElementById('ei-msg');
+  if(isNaN(newAmt)||newAmt<0){msg.innerHTML=`<div class="alert alert-err">⚠️ Введите количество</div>`;return;}
+  msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> Сохранение...</div>`;
+  try {
+    // Обновляем запись в журнале
+    await sbUpsert('intake_log', {id:logId, amount:newAmt, note}, 'id');
+    // Пересчитываем day_records: убираем старый приход, добавляем новый
+    const rec = await sbGet('day_records',`feed_id=eq.${feedId}&site=eq.${curSite}&year=eq.${year}&month=eq.${month}&day=eq.${day}&limit=1`);
+    const existing = rec[0] || {intake:0, expense:0};
+    const newIntake = Math.max(0, Number(existing.intake||0) - oldAmt + newAmt);
+    await sbUpsert('day_records',{feed_id:feedId,site:curSite,year,month,day,intake:newIntake,expense:existing.expense||0},'feed_id,site,year,month,day');
+    await reloadDayData(true);
+    toast('✅ Приход обновлён');
+    closeModal();
+    renderIntake();
+  }catch(e){msg.innerHTML=`<div class="alert alert-err">❌ ${e.message}</div>`;}
+}
+
+async function deleteIntake(logId, feedId, amt, day, month, year){
+  if(!confirm(`Удалить приход ${fmt(amt)} т?`)) return;
+  try {
+    await sbDelete('intake_log', `id=eq.${logId}`);
+    // Убираем из day_records
+    const rec = await sbGet('day_records',`feed_id=eq.${feedId}&site=eq.${curSite}&year=eq.${year}&month=eq.${month}&day=eq.${day}&limit=1`);
+    const existing = rec[0];
+    if(existing){
+      const newIntake = Math.max(0, Number(existing.intake||0) - amt);
+      await sbUpsert('day_records',{feed_id:feedId,site:curSite,year,month,day,intake:newIntake,expense:existing.expense||0},'feed_id,site,year,month,day');
+    }
+    await reloadDayData(true);
+    toast('🗑 Приход удалён');
+    renderIntake();
+  }catch(e){toast('❌ '+e.message);}
 }
 
 // ============================================================
@@ -1854,7 +1921,7 @@ async function archiveFeedGlobal(feedId, feedName, isCurrentlyArchived){
 // ============================================================
 function showAddFeedModal(){
   document.getElementById('modal-content').innerHTML=`
-    <div class="modal-title">🌱 Новый ингредиент</div>
+    <div class="modal-title">&#127807; Новый ингредиент</div>
     <div class="form-group"><label>Название</label>
       <input type="text" id="nf-name" placeholder="Например: Жмых льняной" autofocus></div>
     <div class="form-group"><label>Потребность в месяц (т)</label>
@@ -1862,7 +1929,7 @@ function showAddFeedModal(){
     <div class="form-group"><label>Остаток на сегодня (т)</label>
       <input type="number" id="nf-bal" placeholder="0.000" step="0.001" min="0" inputmode="decimal"></div>
     <div id="nf-msg"></div>
-    <button class="btn btn-gold" onclick="doAddFeed()" style="margin-bottom:8px">✅ Добавить</button>
+    <button class="btn btn-gold" onclick="doAddFeed()" style="margin-bottom:8px">OK Добавить</button>
     <button class="btn btn-ghost" onclick="closeModal()">Отмена</button>`;
   document.getElementById('modal-bg').classList.add('show');
 }
@@ -1872,13 +1939,13 @@ async function doAddFeed(){
   const pm=parseFloat(document.getElementById('nf-month').value)||0;
   const bal=parseFloat(document.getElementById('nf-bal').value)||0;
   const msg=document.getElementById('nf-msg');
-  if(!name){msg.innerHTML=`<div class="alert alert-err">⚠️ Введите название</div>`;return;}
-  msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> Сохраняем...</div>`;
+  if(!name){msg.innerHTML='<div class="alert alert-err">Введите название</div>';return;}
+  msg.innerHTML='<div class="alert alert-info"><span class="spin"></span> Сохраняем...</div>';
   try {
     const existing=findExistingFeedByName(name);
-    const id=existing?existing.id:'f_'+normFeedName(name).replace(/[^\u0430-\u044fa-z0-9]/gi,'_').slice(0,18)+'_'+Date.now();
+    const id=existing?existing.id:'f_'+normFeedName(name).replace(/[^а-яa-z0-9]/gi,'_').slice(0,18)+'_'+Date.now();
     const sortOrder=FEEDS.length>0?Math.max(...FEEDS.map(f=>f.sort_order||0))+1:0;
-    await sbUpsert('feeds',{id,name:existing?existing.name:name,unit:'\u0442',per_month_t:pm,sort_order:existing?existing.sort_order:sortOrder,active:true});
+    await sbUpsert('feeds',{id,name:existing?existing.name:name,unit:'т',per_month_t:pm,sort_order:existing?existing.sort_order:sortOrder,active:true});
     await sbUpsert('monthly_needs',{feed_id:id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:pm},'feed_id,site,year,month');
     if(bal>0) await sbUpsert('opening_balances',{feed_id:id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,opening_balance:bal},'feed_id,site,year,month');
     FEEDS=await sbGet('feeds','order=sort_order');
@@ -1886,7 +1953,7 @@ async function doAddFeed(){
     MONTHLY_NEEDS=await sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`);
     localStorage.setItem('feeds',JSON.stringify(FEEDS));
     closeModal(); renderSettings();
-  } catch(e){msg.innerHTML=`<div class="alert alert-err">❌ ${e.message}</div>`;}
+  } catch(e){msg.innerHTML='<div class="alert alert-err">'+e.message+'</div>';}
 }
 
 // ============================================================
@@ -1895,16 +1962,16 @@ async function doAddFeed(){
 function showAdjustModal(feedId){
   const f=FEEDS.find(x=>x.id===feedId); if(!f) return;
   const curBal=balEnd(f.id,selDay);
-  document.getElementById('modal-content').innerHTML=`
-    <div class="modal-title">✏️ Корректировка остатка</div>
-    <div class="alert alert-warn" style="font-size:12px">${feedIco(f.name)} <b>${f.name}</b><br>Расчётный остаток: <b>${fmt(curBal)} т</b></div>
-    <div class="form-group"><label>Фактический остаток (т)</label>
-      <input type="number" id="adj-val" value="${fmt(curBal)}" step="0.001" min="0" inputmode="decimal"></div>
-    <div class="form-group"><label>Причина</label>
-      <input type="text" id="adj-note" placeholder="Инвентаризация, пересчёт..."></div>
-    <div id="adj-msg"></div>
-    <button class="btn btn-gold" onclick="doAdjust('${feedId}')" style="margin-bottom:8px">💾 Сохранить</button>
-    <button class="btn btn-ghost" onclick="closeModal()">Отмена</button>`;
+  document.getElementById('modal-content').innerHTML=
+    '<div class="modal-title">Корректировка остатка</div>'+
+    '<div class="alert alert-warn" style="font-size:12px"><b>'+f.name+'</b> Расч. остаток: <b>'+fmt(curBal)+' т</b></div>'+
+    '<div class="form-group"><label>Фактический остаток (т)</label>'+
+    '<input type="number" id="adj-val" value="'+fmt(curBal)+'" step="0.001" min="0" inputmode="decimal"></div>'+
+    '<div class="form-group"><label>Причина</label>'+
+    '<input type="text" id="adj-note" placeholder="Инвентаризация..."></div>'+
+    '<div id="adj-msg"></div>'+
+    '<button class="btn btn-gold" onclick="doAdjust(\''+feedId+'\')" style="margin-bottom:8px">Сохранить</button>'+
+    '<button class="btn btn-ghost" onclick="closeModal()">Отмена</button>';
   document.getElementById('modal-bg').classList.add('show');
 }
 
@@ -1912,16 +1979,16 @@ async function doAdjust(feedId){
   const val=parseFloat(document.getElementById('adj-val').value);
   const note=document.getElementById('adj-note').value.trim();
   const msg=document.getElementById('adj-msg');
-  if(isNaN(val)||val<0){msg.innerHTML=`<div class="alert alert-err">⚠️ Введите значение</div>`;return;}
-  msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> Сохраняем...</div>`;
+  if(isNaN(val)||val<0){msg.innerHTML='<div class="alert alert-err">Введите значение</div>';return;}
+  msg.innerHTML='<div class="alert alert-info"><span class="spin"></span> Сохраняем...</div>';
   try {
     const rec=getDayRec(feedId,selDay);
     await sbUpsert('day_records',{feed_id:feedId,site:curSite,year:CUR_YEAR,month:CUR_MONTH,day:selDay,
       intake:rec.intake||0,expense:rec.expense||0,adjustment_balance:val},'feed_id,site,year,month,day');
     await reloadDayData(true);
-    toast('✅ Остаток скорректирован');
+    toast('Остаток скорректирован');
     closeModal(); render();
-  } catch(e){msg.innerHTML=`<div class="alert alert-err">❌ ${e.message}</div>`;}
+  } catch(e){msg.innerHTML='<div class="alert alert-err">'+e.message+'</div>';}
 }
 
 function closeModal(){document.getElementById('modal-bg').classList.remove('show');}
@@ -1929,9 +1996,23 @@ function closeModal(){document.getElementById('modal-bg').classList.remove('show
 // ============================================================
 // HELPERS
 // ============================================================
-function fmt(v){if(v===undefined||v===null||v==='')return'0';const n=Math.round(Number(v)*1000)/1000;return String(n);}
-function fmtTime(iso){if(!iso)return'';const d=new Date(iso);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
-function toast(msg){const t=document.getElementById('toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
+function fmt(v){
+  if(v===undefined||v===null||v==='')return'0';
+  const n=Math.round(Number(v)*1000)/1000;
+  return String(n);
+}
+function fmtTime(iso){
+  if(!iso)return'';
+  const d=new Date(iso);
+  return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+function toast(msg){
+  const t=document.getElementById('toast');
+  if(!t)return;
+  t.textContent=msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2800);
+}
 
 // ============================================================
 // INIT
