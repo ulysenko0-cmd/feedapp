@@ -733,7 +733,7 @@ const CUR_YEAR  = TODAY.getFullYear();
 const CUR_MONTH = TODAY.getMonth()+1;
 const CUR_DAY   = TODAY.getDate();
 
-let curSite = 'РУС';
+let curSite = localStorage.getItem('curSite') || 'РУС';
 let selDay  = CUR_DAY;
 let curPage = 'dash';
 let ME = null;
@@ -849,26 +849,8 @@ function setLoader(txt){ const el=document.getElementById('loader-text'); if(el)
 
 async function loadAll(){
   try {
-    setLoader('Проверка кэша...');
-    // Сразу показываем кэш из localStorage пока грузятся свежие данные
-    const cachedMe = JSON.parse(localStorage.getItem('me')||'null');
-    if (cachedMe) {
-      ME = cachedMe;
-      FEEDS    = JSON.parse(localStorage.getItem('feeds')||'[]');
-      DAY_DATA = JSON.parse(localStorage.getItem('day_data')||'[]');
-      OPEN_BAL = JSON.parse(localStorage.getItem('open_bal')||'[]');
-      EDIT_OPEN_BAL = OPEN_BAL;
-      LOGS     = JSON.parse(localStorage.getItem('logs')||'[]');
-      MONTHLY_NEEDS = JSON.parse(localStorage.getItem('monthly_needs')||'[]');
-      YEAR_DAY_DATA = JSON.parse(localStorage.getItem('year_day_data')||'[]');
-      YEAR_OPEN_BAL = JSON.parse(localStorage.getItem('year_open_bal')||'[]');
-      YEAR_MONTHLY_NEEDS = JSON.parse(localStorage.getItem('year_monthly_needs')||'[]');
-      if (ME.role==='operator') curSite = ME.site || 'РУС';
-      applyRoleUI();
-      document.getElementById('loader').style.display='none';
-      render();
-    }
-
+    setLoader('Загрузка...');
+    // Кэш только при офлайне — всегда загружаем свежее
     setLoader('Авторизация (ID: '+TG_ID+')...');
     // Загружаем свежие данные параллельно с проверкой пользователя
     let users = await sbGet('app_users', `tg_id=eq.${TG_ID}`);
@@ -885,7 +867,7 @@ async function loadAll(){
     }
     ME = users[0];
     if (!ME.role) { showAccessDenied(); return; }
-    if (ME.role==='operator') curSite = ME.site || 'РУС';
+    if (ME.role==='operator') { curSite = ME.site || 'РУС'; localStorage.setItem('curSite', curSite); }
 
     setLoader('Загрузка данных...');
     // Все основные данные — одним параллельным пакетом
@@ -1077,6 +1059,7 @@ function goPage(page, el){
 function setSite(s){
   if (!CAN.otherSite(ME && ME.role, ME && ME.site, s)) { toast('🔒 Нет доступа к этой площадке'); return; }
   curSite=s;
+  localStorage.setItem('curSite', s);
   document.querySelectorAll('.site-btn').forEach(b=>b.classList.toggle('on',b.dataset.s===s));
   reloadDayData(true).then(()=>loadEditOpenBalances()).then(render);
 }
