@@ -1997,9 +1997,8 @@ function closeModal(){document.getElementById('modal-bg').classList.remove('show
 // HELPERS
 // ============================================================
 function fmt(v){
-  if(v===undefined||v===null||v==='')return'0';
-  const n=Math.round(Number(v)*1000)/1000;
-  return String(n);
+  if(v===undefined||v===null||v==='')return'0.00';
+  return Number(v).toFixed(2);
 }
 function fmtTime(iso){
   if(!iso)return'';
