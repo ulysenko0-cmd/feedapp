@@ -2026,4 +2026,17 @@ function closeModal(){document.getElementById('modal-bg').classList.remove('show
 // ============================================================
 function fmt(v){
   if(v===undefined||v===null||v==='')return'0.00';
-  return 
+  return Number(v).toFixed(2);
+}
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+loadAll();
+</script>
+</body>
+</html>
