@@ -864,6 +864,8 @@ async function loadAll(){
         await sbInsert('app_users', {tg_id:TG_ID, name:TG_NAME, username:TG_USERNAME, role:'admin', site:'РУС'});
         users = [{tg_id:TG_ID, name:TG_NAME, username:TG_USERNAME, role:'admin', site:'РУС'}];
       } else {
+        // Сохраняем нового пользователя с пустой ролью — чтобы админ мог его назначить
+        try { await sbInsert('app_users', {tg_id:TG_ID, name:TG_NAME, username:TG_USERNAME, role:'', site:'РУС'}); } catch(e){}
         showAccessDenied(); return;
       }
     }
@@ -1541,10 +1543,10 @@ function renderSettings(){
 
   // Users
   let usersHtml=USERS.map(u=>`
-    <div class="user-row">
-      <div class="user-avatar">${ROLE_ICONS[u.role]||'🌱'}</div>
+    <div class="user-row" style="${!u.role?'border-left:3px solid var(--gold);padding-left:8px':''}">
+      <div class="user-avatar">${!u.role?'🆕':(ROLE_ICONS[u.role]||'🌱')}</div>
       <div class="user-info">
-        <div class="user-name">${u.name}</div>
+        <div class="user-name">${u.name}${!u.role?' <span style="color:var(--gold);font-size:11px">· ожидает роль</span>':''}</div>
         <div class="user-meta">ID: ${u.tg_id}${u.username?' · @'+u.username:''}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end">
@@ -2027,15 +2029,4 @@ function toast(msg){
   if(!t)return;
   t.textContent=msg;
   t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),2800);
-}
-
-// ============================================================
-// INIT
-// ============================================================
-loadAll();
-setInterval(()=>{if(!document.hidden)reloadDayData().then(render);},60000);
-</script>
-</body>
-</html>
-                                                                                                                                                                               
+  se
