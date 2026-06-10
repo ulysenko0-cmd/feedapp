@@ -1180,7 +1180,7 @@ function renderDash(){
     totalIntakeToday+=(rec.intake||0);
     const be=balEnd(f.id,selDay);
     const norm=dailyNorm(f);
-    const dLeft=norm>0?be/norm:99;
+    const dLeft=norm>0?Math.floor(be/norm):99;
     if(dLeft<=3)critFeeds++; else if(dLeft<=7)warnFeeds++;
   });
   const statStrip=`<div class="stat-strip">
