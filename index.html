@@ -1229,7 +1229,7 @@ function renderDash(){
     const isCrit=dLeft<=3, isWarn=!isCrit&&dLeft<=7;
     const nameColor=isCrit?'var(--red)':isWarn?'var(--gold)':'var(--text)';
     const rowBg=isCrit?'background:rgba(232,64,42,.07)':isWarn?'background:rgba(245,200,66,.06)':'';
-    const balColor=be<0?'var(--red)':'var(--cream)';
+    const balColor=be<0?'var(--red)':'var(--text)';
     const badge=isCrit?'<span style="font-size:9px;margin-left:4px;color:var(--red);font-weight:900">&#9679;</span>'
                 :isWarn?'<span style="font-size:9px;margin-left:4px;color:var(--gold);font-weight:900">&#9679;</span>':'';
     return `<tr style="${rowBg}">
@@ -1571,15 +1571,19 @@ async function downloadMonthReport(){
 // SETTINGS
 // ============================================================
 function renderSettings(){
-  // Если пользователи ещё не загружены — грузим сразу
-  if (ME && ME.role==='admin' && !USERS.length) {
+  // Если пользователи ещё не загружены — грузим принудительно
+  if (!USERS.length) {
     sbGet('app_users','order=created_at').then(u => {
-      if (u && u.length) {
-        USERS = u;
-        localStorage.setItem('users', JSON.stringify(USERS));
-        renderSettings();
-      }
+      USERS = u || [];
+      localStorage.setItem('users', JSON.stringify(USERS));
+      renderSettings();
     }).catch(()=>{});
+    // Показываем индикатор загрузки пока ждём
+    const pg = document.getElementById('pg-settings');
+    if (pg && !pg.innerHTML.includes('sec')) {
+      pg.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)"><span class="spin"></span> Загрузка пользователей...</div>';
+    }
+    return;
   }
   if(!CAN.settings(ME && ME.role)){
     document.getElementById('pg-settings').innerHTML=`<div class="alert alert-err" style="margin-top:40px">🔒 Только для администратора</div>`;
