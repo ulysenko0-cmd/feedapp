@@ -1229,7 +1229,7 @@ function renderDash(){
     const isCrit=dLeft<=3, isWarn=!isCrit&&dLeft<=7;
     const nameColor=isCrit?'var(--red)':isWarn?'var(--gold)':'var(--text)';
     const rowBg=isCrit?'background:rgba(232,64,42,.07)':isWarn?'background:rgba(245,200,66,.06)':'';
-    const balColor=be<0?'var(--red)':'var(--text)';
+    const balColor=(be<0||isCrit)?'var(--red)':isWarn?'var(--gold)':'var(--text)';
     const badge=isCrit?'<span style="font-size:9px;margin-left:4px;color:var(--red);font-weight:900">&#9679;</span>'
                 :isWarn?'<span style="font-size:9px;margin-left:4px;color:var(--gold);font-weight:900">&#9679;</span>':'';
     return `<tr style="${rowBg}">
