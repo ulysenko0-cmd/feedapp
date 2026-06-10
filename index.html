@@ -1225,9 +1225,15 @@ function renderDash(){
   // Summary table
   let trows=activeFeeds().map(f=>{
     const be=balEnd(f.id,selDay), rec=getDayRec(f.id,selDay), norm=dailyNorm(f), exp=rec.expense>0?rec.expense:norm;
-    const balColor=be<0?'var(--red)':'#3b2a16';
-    return `<tr>
-      <td class="tname">${feedIco(f.name)} ${f.name}</td>
+    const dLeft=norm>0?Math.floor(be/norm):99;
+    const isCrit=dLeft<=3, isWarn=!isCrit&&dLeft<=7;
+    const nameColor=isCrit?'var(--red)':isWarn?'var(--gold)':'var(--text)';
+    const rowBg=isCrit?'background:rgba(232,64,42,.07)':isWarn?'background:rgba(245,200,66,.06)':'';
+    const balColor=be<0?'var(--red)':'var(--cream)';
+    const badge=isCrit?'<span style="font-size:9px;margin-left:4px;color:var(--red);font-weight:900">&#9679;</span>'
+                :isWarn?'<span style="font-size:9px;margin-left:4px;color:var(--gold);font-weight:900">&#9679;</span>':'';
+    return `<tr style="${rowBg}">
+      <td class="tname" style="color:${nameColor}">${feedIco(f.name)} ${f.name}${badge}</td>
       <td class="mono" style="color:var(--lime)">${fmt(rec.intake||0)}</td>
       <td class="mono" style="color:var(--red)">${fmt(exp)}</td>
       <td class="mono" style="color:${balColor};font-weight:900">${fmt(be)}</td>
@@ -1565,6 +1571,16 @@ async function downloadMonthReport(){
 // SETTINGS
 // ============================================================
 function renderSettings(){
+  // Если пользователи ещё не загружены — грузим сразу
+  if (ME && ME.role==='admin' && !USERS.length) {
+    sbGet('app_users','order=created_at').then(u => {
+      if (u && u.length) {
+        USERS = u;
+        localStorage.setItem('users', JSON.stringify(USERS));
+        renderSettings();
+      }
+    }).catch(()=>{});
+  }
   if(!CAN.settings(ME && ME.role)){
     document.getElementById('pg-settings').innerHTML=`<div class="alert alert-err" style="margin-top:40px">🔒 Только для администратора</div>`;
     return;
