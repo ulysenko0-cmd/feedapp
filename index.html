@@ -750,7 +750,7 @@ let ME = null;
 
 let FEEDS=[], DAY_DATA=[], OPEN_BAL=[], EDIT_OPEN_BAL=[], LOGS=[], USERS=[], MONTHLY_NEEDS=[];
 let YEAR_DAY_DATA=[], YEAR_OPEN_BAL=[], YEAR_MONTHLY_NEEDS=[];
-let OB_YEAR=CUR_YEAR, OB_MONTH=CUR_MONTH;
+let OB_YEAR=CUR_YEAR, OB_MONTH=CUR_MONTH, OB_DAY=1;
 
 function daysInMonth(){ return new Date(CUR_YEAR,CUR_MONTH,0).getDate(); }
 function monthlyNeed(f){
@@ -771,7 +771,7 @@ function getOpenBal(feedId){
   return r && r.opening_balance ? r.opening_balance : 0;
 }
 function getEditOpenBal(feedId){
-  const r=EDIT_OPEN_BAL.find(x=>x.feed_id===feedId&&x.site===curSite&&Number(x.year)===OB_YEAR&&Number(x.month)===OB_MONTH);
+  const r=EDIT_OPEN_BAL.find(x=>x.feed_id===feedId&&x.site===curSite&&Number(x.year)===OB_YEAR&&Number(x.month)===OB_MONTH&&Number(x.day||1)===OB_DAY);
   return r && r.opening_balance ? r.opening_balance : 0;
 }
 function obPeriodValue(){
@@ -784,7 +784,11 @@ function setOBPeriod(v){
   const p=(v||'').split('-').map(Number);
   if(p.length!==2 || !p[0] || !p[1]) return;
   OB_YEAR=p[0]; OB_MONTH=p[1];
-  loadEditOpenBalances().then(renderSettings).catch(()=>toast('Не удалось загрузить остатки'));
+  loadEditOpenBalances().then(()=>renderSettings(true)).catch(()=>toast('Не удалось загрузить остатки'));
+}
+function setOBDay(v){
+  OB_DAY=parseInt(v)||1;
+  renderSettings(true);
 }
 function getDayRec(feedId,day){
   return DAY_DATA.find(x=>x.feed_id===feedId&&x.site===curSite&&x.year===CUR_YEAR&&x.month===CUR_MONTH&&x.day===day)||{intake:0,expense:0};
@@ -802,22 +806,27 @@ function getYearMonthlyNeed(feed,year,month){
   if(year===CUR_YEAR&&month===CUR_MONTH) return monthlyNeed(feed);
   return Number(feed.per_month_t||0);
 }
-function latestYearStart(feedId,year,month){
+function latestYearStart(feedId,year,month,day=31){
   const candidates=YEAR_OPEN_BAL
-    .filter(x=>x.feed_id===feedId&&x.site===curSite&&(Number(x.year)<year||(Number(x.year)===year&&Number(x.month)<=month)))
-    .sort((a,b)=>Number(b.year)-Number(a.year)||Number(b.month)-Number(a.month));
-  if(candidates[0]) return {year:Number(candidates[0].year),month:Number(candidates[0].month),balance:Number(candidates[0].opening_balance||0)};
+    .filter(x=>{
+      const xy=Number(x.year),xm=Number(x.month),xd=Number(x.day||1);
+      return x.feed_id===feedId&&x.site===curSite&&(
+        xy<year||(xy===year&&xm<month)||(xy===year&&xm===month&&xd<=day)
+      );
+    })
+    .sort((a,b)=>Number(b.year)-Number(a.year)||Number(b.month)-Number(a.month)||Number(b.day||1)-Number(a.day||1));
+  if(candidates[0]) return {year:Number(candidates[0].year),month:Number(candidates[0].month),day:Number(candidates[0].day||1),balance:Number(candidates[0].opening_balance||0)};
   // Fallback: YEAR_OPEN_BAL ещё не загружен — берём OPEN_BAL текущего месяца
   const ob=OPEN_BAL.find(x=>x.feed_id===feedId&&x.site===curSite&&Number(x.year)===CUR_YEAR&&Number(x.month)===CUR_MONTH);
-  if(ob) return {year:CUR_YEAR,month:CUR_MONTH,balance:Number(ob.opening_balance||0)};
-  return {year,month,balance:0};
+  if(ob) return {year:CUR_YEAR,month:CUR_MONTH,day:Number(ob.day||1),balance:Number(ob.opening_balance||0)};
+  return {year,month,day:1,balance:0};
 }
 function balEnd(feedId,day){
   const f=FEEDS.find(x=>x.id===feedId); if(!f) return 0;
-  const start=latestYearStart(feedId,CUR_YEAR,CUR_MONTH);
+  const start=latestYearStart(feedId,CUR_YEAR,CUR_MONTH,day);
   let bal=start.balance;
   for(let y=start.year, m=start.month; y<CUR_YEAR || (y===CUR_YEAR && m<=CUR_MONTH); ){
-    const firstDay=(y===start.year&&m===start.month)?1:1;
+    const firstDay=(y===start.year&&m===start.month)?start.day:1;
     const lastDay=(y===CUR_YEAR&&m===CUR_MONTH)?day:new Date(y,m,0).getDate();
     const need=getYearMonthlyNeed(f,y,m);
     const norm=need/new Date(y,m,0).getDate();
@@ -834,13 +843,13 @@ function balEnd(feedId,day){
 }
 function balEndMonth(feedId,year,month,day){
   const f=FEEDS.find(x=>x.id===feedId); if(!f) return 0;
-  const start=latestYearStart(feedId,year,month);
+  const start=latestYearStart(feedId,year,month,day);
   let bal=start.balance;
   for(let y=start.year, m=start.month; y<year || (y===year && m<=month); ){
     const lastDay=(y===year&&m===month)?day:new Date(y,m,0).getDate();
     const need=getYearMonthlyNeed(f,y,m);
     const norm=need/new Date(y,m,0).getDate();
-    for(let d=1;d<=lastDay;d++){
+    for(let d=(y===start.year&&m===start.month)?start.day:1;d<=lastDay;d++){
       const rec=getYearDayRec(feedId,y,m,d);
       bal+=Number(rec.intake||0);
       bal-=(Number(rec.expense||0)>0?Number(rec.expense||0):norm);
@@ -1067,11 +1076,11 @@ async function autoRolloverIfNeeded(site) {
       if (rec && rec.adjustment_balance !== null && rec.adjustment_balance !== undefined)
         balance = Number(rec.adjustment_balance);
     }
-    obRows.push({ feed_id: feed.id, site, year: CUR_YEAR, month: CUR_MONTH, opening_balance: Math.round(balance * 1000) / 1000 });
+    obRows.push({ feed_id: feed.id, site, year: CUR_YEAR, month: CUR_MONTH, day: 1, opening_balance: Math.round(balance * 1000) / 1000 });
   }
 
   // Один запрос для всех остатков + один для всех потребностей
-  const saves = [sbUpsert('opening_balances', obRows, 'feed_id,site,year,month')];
+  const saves = [sbUpsert('opening_balances', obRows, 'feed_id,site,year,month,day')];
   if (!existingNeeds.length && prevNeeds.length) {
     const mnRows = prevNeeds.map(n => ({ feed_id: n.feed_id, site, year: CUR_YEAR, month: CUR_MONTH, per_month_t: n.per_month_t }));
     saves.push(sbUpsert('monthly_needs', mnRows, 'feed_id,site,year,month'));
@@ -1402,7 +1411,7 @@ async function doEditIntake(logId, feedId, oldAmt, day, month, year){
   msg.innerHTML=`<div class="alert alert-info"><span class="spin"></span> Сохранение...</div>`;
   try {
     // Обновляем запись в журнале
-    await sbUpsert('intake_log', {id:logId, amount:newAmt, note}, 'id');
+    await sbPatch('intake_log', `id=eq.${logId}`, {amount:newAmt, note});
     // Пересчитываем day_records: убираем старый приход, добавляем новый
     const rec = await sbGet('day_records',`feed_id=eq.${feedId}&site=eq.${curSite}&year=eq.${year}&month=eq.${month}&day=eq.${day}&limit=1`);
     const existing = rec[0] || {intake:0, expense:0};
@@ -1699,10 +1708,15 @@ function renderSettings(skipRefresh=false){
       <div class="sec-head"><span class="ico">📦</span>Остатки на 1-е число — ${siteName(curSite)}</div>
       <div class="sec-body">
         <div class="form-group">
-          <label>Месяц остатков</label>
-          <input type="month" id="obPeriod" value="${obPeriodValue()}" onchange="setOBPeriod(this.value)">
+          <label>Дата остатков</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="month" id="obPeriod" value="${obPeriodValue()}" onchange="setOBPeriod(this.value)" style="flex:1">
+            <select id="obDay" onchange="setOBDay(this.value)" style="width:72px">
+              ${Array.from({length:31},(_,i)=>`<option value="${i+1}" ${OB_DAY===i+1?'selected':''}>${String(i+1).padStart(2,'0')}</option>`).join('')}
+            </select>
+          </div>
         </div>
-        <div class="alert alert-info" style="font-size:12px">Выбранный месяц сохраняется отдельно. Например, 2026-05 = остатки на 01.05.</div>
+        <div class="alert alert-info" style="font-size:12px">Выбранная дата — точка отсчёта. Остатки с этой даты используются в расчётах.</div>
         ${obRows}<div id="ob-msg"></div>
         <button class="btn btn-gold" onclick="saveOB()">💾 Сохранить остатки</button>
       </div>
@@ -1761,11 +1775,11 @@ async function saveOB(){
     const val=parseFloat(el.value);
     const original=parseFloat(el.dataset.original||'0');
     if(isNaN(val) || val===original) return null;
-    return {feed_id:f.id,site:curSite,year:OB_YEAR,month:OB_MONTH,opening_balance:val};
+    return {feed_id:f.id,site:curSite,year:OB_YEAR,month:OB_MONTH,day:OB_DAY,opening_balance:val};
   }).filter(Boolean);
   if(!rows.length){toast('Нет новых остатков для сохранения');return;}
   try{
-    await sbUpsert('opening_balances',rows,'feed_id,site,year,month');
+    await sbUpsert('opening_balances',rows,'feed_id,site,year,month,day');
     await loadEditOpenBalances();
     if(OB_YEAR===CUR_YEAR && OB_MONTH===CUR_MONTH){
       OPEN_BAL=EDIT_OPEN_BAL;
@@ -1784,7 +1798,7 @@ async function saveOneOB(feedId){
   const val=parseFloat(el.value);
   if(isNaN(val)||val<0){toast('Введите корректный остаток');return;}
   try{
-    await sbUpsert('opening_balances',{feed_id:feedId,site:curSite,year:OB_YEAR,month:OB_MONTH,opening_balance:val},'feed_id,site,year,month');
+    await sbUpsert('opening_balances',{feed_id:feedId,site:curSite,year:OB_YEAR,month:OB_MONTH,day:OB_DAY,opening_balance:val},'feed_id,site,year,month,day');
     await loadEditOpenBalances();
     if(OB_YEAR===CUR_YEAR && OB_MONTH===CUR_MONTH){
       OPEN_BAL=EDIT_OPEN_BAL;
@@ -2028,7 +2042,7 @@ async function doAddFeed(){
     const sortOrder=FEEDS.length>0?Math.max(...FEEDS.map(f=>f.sort_order||0))+1:0;
     await sbUpsert('feeds',{id,name:existing?existing.name:name,unit:'т',per_month_t:pm,sort_order:existing?existing.sort_order:sortOrder,active:true});
     await sbUpsert('monthly_needs',{feed_id:id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:pm},'feed_id,site,year,month');
-    if(bal>0) await sbUpsert('opening_balances',{feed_id:id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,opening_balance:bal},'feed_id,site,year,month');
+    if(bal>0) await sbUpsert('opening_balances',{feed_id:id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,day:1,opening_balance:bal},'feed_id,site,year,month,day');
     FEEDS=await sbGet('feeds','order=sort_order');
     OPEN_BAL=await sbGet('opening_balances',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`);
     MONTHLY_NEEDS=await sbGet('monthly_needs',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`);
