@@ -1582,20 +1582,21 @@ async function downloadMonthReport(){
 // ============================================================
 // SETTINGS
 // ============================================================
-function renderSettings(){
-  // Если пользователи ещё не загружены — грузим принудительно
-  if (!USERS.length) {
+function renderSettings(skipRefresh=false){
+  // Всегда обновляем список пользователей с сервера (чтобы видеть новых)
+  if (!skipRefresh) {
     sbGet('app_users','order=created_at').then(u => {
       USERS = u || [];
       localStorage.setItem('users', JSON.stringify(USERS));
-      renderSettings();
-    }).catch(()=>{});
-    // Показываем индикатор загрузки пока ждём
-    const pg = document.getElementById('pg-settings');
-    if (pg && !pg.innerHTML.includes('sec')) {
-      pg.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)"><span class="spin"></span> Загрузка пользователей...</div>';
+      renderSettings(true);
+    }).catch(()=>{ renderSettings(true); });
+    // Пока грузим — рисуем то что уже есть (или спиннер если пусто)
+    if (!USERS.length) {
+      const pg = document.getElementById('pg-settings');
+      if (pg) pg.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)"><span class="spin"></span> Загрузка пользователей...</div>';
+      return;
     }
-    return;
+    // Если USERS уже есть — сразу рисуем их (без return), потом придёт обновление
   }
   if(!CAN.settings(ME && ME.role)){
     document.getElementById('pg-settings').innerHTML=`<div class="alert alert-err" style="margin-top:40px">🔒 Только для администратора</div>`;
