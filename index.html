@@ -1148,10 +1148,11 @@ async function refreshData(){
 }
 
 function render(){
-  if(curPage==='dash')     renderDash();
-  if(curPage==='intake')   renderIntake();
-  if(curPage==='month')    renderMonth();
-  if(curPage==='settings') renderSettings();
+  // Всегда рендерим все основные страницы чтобы данные везде были актуальны
+  renderDash();
+  renderIntake();
+  renderMonth();
+  if(curPage==='settings') renderSettings(true);
 }
 
 // ============================================================
