@@ -1108,6 +1108,7 @@ function goPage(page, el){
   document.querySelectorAll('.bni').forEach(b=>b.classList.remove('on'));
   if(el) el.classList.add('on');
   render();
+  render();
 }
 
 function setSite(s){
@@ -1419,7 +1420,7 @@ async function doEditIntake(logId, feedId, oldAmt, day, month, year){
     await reloadDayData(true);
     toast('✅ Приход обновлён');
     closeModal();
-    renderIntake();
+    render();
   }catch(e){msg.innerHTML=`<div class="alert alert-err">❌ ${e.message}</div>`;}
 }
 
@@ -1436,7 +1437,7 @@ async function deleteIntake(logId, feedId, amt, day, month, year){
     }
     await reloadDayData(true);
     toast('🗑 Приход удалён');
-    renderIntake();
+    render();
   }catch(e){toast('❌ '+e.message);}
 }
 
