@@ -1002,7 +1002,6 @@ async function loadAll(){
 }
 
 async function reloadDayData(includeStatic=false){
-  if (document.hidden) return;
   try {
     const [dayData, logs, yearDayData] = await Promise.all([
       sbGet('day_records',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`),
@@ -1785,6 +1784,9 @@ async function saveOB(){
       OPEN_BAL=EDIT_OPEN_BAL;
       localStorage.setItem('open_bal',JSON.stringify(OPEN_BAL));
     }
+    // Обновляем YEAR_OPEN_BAL чтобы баланс пересчитался сразу
+    YEAR_OPEN_BAL = await sbGet('opening_balances',`year=eq.${CUR_YEAR}&site=eq.${curSite}`);
+    localStorage.setItem('year_open_bal',JSON.stringify(YEAR_OPEN_BAL));
     rows.forEach(r=>{const el=document.getElementById('ob_'+r.feed_id); if(el) el.dataset.original=String(r.opening_balance);});
     toast('✅ Остатки сохранены');
     const m=document.getElementById('ob-msg');
@@ -1804,6 +1806,8 @@ async function saveOneOB(feedId){
       OPEN_BAL=EDIT_OPEN_BAL;
       localStorage.setItem('open_bal',JSON.stringify(OPEN_BAL));
     }
+    YEAR_OPEN_BAL = await sbGet('opening_balances',`year=eq.${CUR_YEAR}&site=eq.${curSite}`);
+    localStorage.setItem('year_open_bal',JSON.stringify(YEAR_OPEN_BAL));
     el.dataset.original=String(val);
     toast('✅ Остаток сохранён');
     render();
