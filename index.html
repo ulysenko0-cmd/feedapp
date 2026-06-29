@@ -1108,7 +1108,7 @@ function goPage(page, el){
   document.querySelectorAll('.bni').forEach(b=>b.classList.remove('on'));
   if(el) el.classList.add('on');
   render();
-  render();
+  if(page==='settings') renderSettings();
 }
 
 function setSite(s){
