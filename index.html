@@ -1554,45 +1554,51 @@ function calculateFeedPlan(feed){
   const overrides=SUPPLY_OVERRIDES
     .filter(x=>x.feed_id===feed.id&&x.site===curSite&&Number(x.year)===CUR_YEAR&&Number(x.month)===CUR_MONTH)
     .sort((a,b)=>Number(a.plan_index)-Number(b.plan_index));
+  const overrideEvents=overrides.map(x=>({
+    index:Number(x.plan_index),day:Number(x.delivery_day),qty:SUPPLY_BATCH_T,fact:0,manual:true,past:false
+  }));
+  allocatePlanFacts(feed.id,overrideEvents);
   const events=[];
   const riskDays=[];
 
   // Сохраняем в списке уже прошедшие ручные строки, чтобы факт не исчезал.
-  overrides.filter(x=>Number(x.delivery_day)<startDay).forEach(x=>{
-    const day=Number(x.delivery_day), qty=SUPPLY_BATCH_T;
-    events.push({index:Number(x.plan_index),day,qty,fact:0,manual:true,past:true});
+  overrideEvents.filter(x=>x.day<startDay).forEach(x=>{
+    events.push({...x,past:true});
   });
 
   let nextIndex=events.length?Math.max(...events.map(x=>x.index))+1:1;
   let balance=startDay>1?balEnd(feed.id,startDay-1):balStart(feed.id,1);
 
   for(let day=startDay;day<=dim;day++){
-    let forced=overrides.find(x=>Number(x.plan_index)===nextIndex);
-    while(forced&&Number(forced.delivery_day)===day){
+    let deliveredToday=false;
+    const forced=overrideEvents.find(x=>x.index===nextIndex);
+    // Если администратор перенёс две машины на одну дату, вторая автоматически
+    // переходит на следующий день: по одному ингредиенту не более одной машины в день.
+    if(forced&&forced.day<=day){
       const qty=SUPPLY_BATCH_T;
-      const fact=actualIntakeAround(feed.id,day);
+      const fact=forced.fact;
       // Фактический приход уже учтён в day_records. План добавляем только пока факта нет.
       if(fact<=0) balance+=qty;
       events.push({index:nextIndex,day,qty,fact,manual:true,past:false});
       nextIndex++;
-      forced=overrides.find(x=>Number(x.plan_index)===nextIndex);
+      deliveredToday=true;
     }
 
-    balance=applyPlanDay(feed,day,balance);
-    if(balance<0){
-      const waiting=overrides.find(x=>Number(x.plan_index)===nextIndex&&Number(x.delivery_day)>day);
+    const projected=applyPlanDay(feed,day,balance);
+    const needsDelivery=projected<0||(projected<=0&&day<dim);
+    if(needsDelivery&&!deliveredToday){
+      const waiting=overrideEvents.find(x=>x.index===nextIndex&&x.day>day);
       if(waiting){
         riskDays.push(day);
-        continue;
-      }
-      let batchesToday=0;
-      while(balance<0&&batchesToday<100){
+      }else{
         balance+=SUPPLY_BATCH_T;
         events.push({index:nextIndex,day,qty:SUPPLY_BATCH_T,fact:0,manual:false,past:false});
         nextIndex++;
-        batchesToday++;
+        deliveredToday=true;
       }
     }
+    balance=applyPlanDay(feed,day,balance);
+    if(balance<0&&!riskDays.includes(day)) riskDays.push(day);
   }
   allocatePlanFacts(feed.id,events);
   return {feed,events,riskDays,endBalance:balance};
@@ -1646,7 +1652,7 @@ function renderPlan(){
           <div class="stat-box"><div class="stat-box-val" style="color:var(--cream)">${trips}</div><div class="stat-box-lbl">Поставок</div></div>
           <div class="stat-box"><div class="stat-box-val" style="color:var(--lime)">${fmt(fact)}</div><div class="stat-box-lbl">Факт, т</div></div>
         </div>
-        <div class="alert alert-info" style="font-size:11px">Каждая поставка — 20 т. Общая потребность округляется вверх до полных машин. Срок заказа рассчитан за 5 рабочих дней.</div>
+        <div class="alert alert-info" style="font-size:11px">Каждая поставка — 20 т, не более одной машины по ингредиенту в день. Следующая дата рассчитывается после ежедневного списания потребности. Заказать нужно за 5 рабочих дней.</div>
         <div class="plan-list">${rows.join('')||'<div class="alert alert-info">Нет ингредиентов с потребностью</div>'}</div>
       </div>
     </div>`;
