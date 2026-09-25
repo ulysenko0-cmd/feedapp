@@ -681,6 +681,7 @@ const SUPABASE_KEY = 'sb_publishable_y5vcLvwP6zO4AUXIAJp6ng_0arShMHX';
 const SITES = { 'РУС': 'ЖК Русь', 'РОС': 'Комплекс Российский' };
 const ROLES = { admin:'Администратор', operator:'Оператор', viewer:'Просмотр' };
 const ROLE_ICONS = { admin:'👑', operator:'🌱', viewer:'👁' };
+const SUPPLY_BATCH_T = 20;
 
 // Иконки для кормов
 const FEED_ICONS = {
@@ -1520,13 +1521,31 @@ function applyPlanDay(feed,day,balance){
   return next;
 }
 
-function quantityToMonthEnd(feed,day,balanceAfterDay){
-  let b=balanceAfterDay, min=b;
-  for(let d=day+1;d<=daysInMonth();d++){
-    b=applyPlanDay(feed,d,b);
-    min=Math.min(min,b);
+function allocatePlanFacts(feedId,events){
+  const buckets=[];
+  for(let day=1;day<=daysInMonth();day++){
+    const amount=Number(getDayRec(feedId,day).intake||0);
+    if(amount>0) buckets.push({day,remaining:amount});
   }
-  return Math.max(0,Math.ceil((-min)*1000)/1000);
+  events.forEach(ev=>{ev.fact=0;});
+  events.forEach(ev=>{
+    const candidates=buckets
+      .filter(b=>b.remaining>0&&Math.abs(b.day-ev.day)<=2)
+      .sort((a,b)=>Math.abs(a.day-ev.day)-Math.abs(b.day-ev.day)||a.day-b.day);
+    let needed=Number(ev.qty||0);
+    candidates.forEach(b=>{
+      if(needed<=0)return;
+      const used=Math.min(needed,b.remaining);
+      ev.fact+=used; b.remaining-=used; needed-=used;
+    });
+  });
+  // Остаток факта сверх плана относим к ближайшей поставке, но только один раз.
+  buckets.filter(b=>b.remaining>0).forEach(b=>{
+    const nearest=events
+      .filter(ev=>Math.abs(b.day-ev.day)<=2)
+      .sort((a,c)=>Math.abs(a.day-b.day)-Math.abs(c.day-b.day)||a.day-c.day)[0];
+    if(nearest){nearest.fact+=b.remaining;b.remaining=0;}
+  });
 }
 
 function calculateFeedPlan(feed){
@@ -1540,22 +1559,23 @@ function calculateFeedPlan(feed){
 
   // Сохраняем в списке уже прошедшие ручные строки, чтобы факт не исчезал.
   overrides.filter(x=>Number(x.delivery_day)<startDay).forEach(x=>{
-    const day=Number(x.delivery_day), qty=Number(x.quantity||0), fact=actualIntakeAround(feed.id,day);
-    events.push({index:Number(x.plan_index),day,qty,fact,manual:true,past:true});
+    const day=Number(x.delivery_day), qty=SUPPLY_BATCH_T;
+    events.push({index:Number(x.plan_index),day,qty,fact:0,manual:true,past:true});
   });
 
   let nextIndex=events.length?Math.max(...events.map(x=>x.index))+1:1;
   let balance=startDay>1?balEnd(feed.id,startDay-1):balStart(feed.id,1);
 
   for(let day=startDay;day<=dim;day++){
-    const forced=overrides.find(x=>Number(x.plan_index)===nextIndex);
-    if(forced&&Number(forced.delivery_day)===day){
-      const qty=Number(forced.quantity||0);
+    let forced=overrides.find(x=>Number(x.plan_index)===nextIndex);
+    while(forced&&Number(forced.delivery_day)===day){
+      const qty=SUPPLY_BATCH_T;
       const fact=actualIntakeAround(feed.id,day);
       // Фактический приход уже учтён в day_records. План добавляем только пока факта нет.
       if(fact<=0) balance+=qty;
       events.push({index:nextIndex,day,qty,fact,manual:true,past:false});
       nextIndex++;
+      forced=overrides.find(x=>Number(x.plan_index)===nextIndex);
     }
 
     balance=applyPlanDay(feed,day,balance);
@@ -1565,14 +1585,16 @@ function calculateFeedPlan(feed){
         riskDays.push(day);
         continue;
       }
-      const qty=quantityToMonthEnd(feed,day,balance);
-      if(qty>0){
-        balance+=qty;
-        events.push({index:nextIndex,day,qty,fact:actualIntakeAround(feed.id,day),manual:false,past:false});
+      let batchesToday=0;
+      while(balance<0&&batchesToday<100){
+        balance+=SUPPLY_BATCH_T;
+        events.push({index:nextIndex,day,qty:SUPPLY_BATCH_T,fact:0,manual:false,past:false});
         nextIndex++;
+        batchesToday++;
       }
     }
   }
+  allocatePlanFacts(feed.id,events);
   return {feed,events,riskDays,endBalance:balance};
 }
 
@@ -1612,17 +1634,19 @@ function renderPlan(){
   });
   const planned=plans.reduce((s,p)=>s+p.events.reduce((x,e)=>x+Number(e.qty||0),0),0);
   const fact=plans.reduce((s,p)=>s+p.events.reduce((x,e)=>x+Number(e.fact||0),0),0);
+  const trips=plans.reduce((s,p)=>s+p.events.length,0);
   const mnames=['','Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
   document.getElementById('pg-plan').innerHTML=`
     ${siteToggleHtml()}
     <div class="sec">
       <div class="sec-head"><span class="ico">📦</span>План поставок · ${mnames[CUR_MONTH]} ${CUR_YEAR}</div>
       <div class="sec-body">
-        <div class="stat-strip" style="grid-template-columns:1fr 1fr">
+        <div class="stat-strip">
           <div class="stat-box"><div class="stat-box-val" style="color:var(--gold)">${fmt(planned)}</div><div class="stat-box-lbl">План, т</div></div>
+          <div class="stat-box"><div class="stat-box-val" style="color:var(--cream)">${trips}</div><div class="stat-box-lbl">Поставок</div></div>
           <div class="stat-box"><div class="stat-box-val" style="color:var(--lime)">${fmt(fact)}</div><div class="stat-box-lbl">Факт, т</div></div>
         </div>
-        <div class="alert alert-info" style="font-size:11px">Срок заказа рассчитан за 5 рабочих дней. Факт сопоставляется с приходами за 2 дня до и после даты поставки.</div>
+        <div class="alert alert-info" style="font-size:11px">Каждая поставка — 20 т. Общая потребность округляется вверх до полных машин. Срок заказа рассчитан за 5 рабочих дней.</div>
         <div class="plan-list">${rows.join('')||'<div class="alert alert-info">Нет ингредиентов с потребностью</div>'}</div>
       </div>
     </div>`;
@@ -1636,7 +1660,7 @@ function showPlanEdit(feedId,index,day,qty){
     <div class="modal-title">Изменить план поставки</div>
     <div class="alert alert-info">${feedIco(feed.name)} <b>${feed.name}</b></div>
     <div class="form-group"><label>Дата поставки</label><input type="date" id="plan-date" value="${dateValue}" min="${CUR_YEAR}-${String(CUR_MONTH).padStart(2,'0')}-01" max="${CUR_YEAR}-${String(CUR_MONTH).padStart(2,'0')}-${String(daysInMonth()).padStart(2,'0')}"></div>
-    <div class="form-group"><label>Количество (т)</label><input type="number" id="plan-qty" value="${Number(qty).toFixed(3)}" min="0.001" step="0.001" inputmode="decimal"></div>
+    <div class="form-group"><label>Количество — одна поставка</label><input type="number" id="plan-qty" value="${SUPPLY_BATCH_T}" readonly></div>
     <div id="plan-msg"></div>
     <button class="btn btn-gold" onclick="savePlanOverride('${feedId}',${index})" style="margin-bottom:8px">Сохранить и пересчитать</button>
     <button class="btn btn-danger" onclick="resetPlanOverride('${feedId}',${index})" style="margin-bottom:8px">Вернуть автоматический расчёт</button>
@@ -1647,9 +1671,8 @@ function showPlanEdit(feedId,index,day,qty){
 async function savePlanOverride(feedId,index){
   const msg=document.getElementById('plan-msg');
   const d=parseDateInput(document.getElementById('plan-date').value);
-  const qty=parseFloat(document.getElementById('plan-qty').value);
+  const qty=SUPPLY_BATCH_T;
   if(!d||d.getFullYear()!==CUR_YEAR||d.getMonth()+1!==CUR_MONTH){msg.innerHTML='<div class="alert alert-err">Выберите дату текущего месяца</div>';return;}
-  if(!qty||qty<=0){msg.innerHTML='<div class="alert alert-err">Введите количество больше нуля</div>';return;}
   msg.innerHTML='<div class="alert alert-info"><span class="spin"></span> Сохранение...</div>';
   try{
     await sbUpsert('supply_plan_overrides',{
