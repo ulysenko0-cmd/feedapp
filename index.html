@@ -801,6 +801,7 @@ let ME = null;
 let FEEDS=[], DAY_DATA=[], OPEN_BAL=[], EDIT_OPEN_BAL=[], LOGS=[], USERS=[], MONTHLY_NEEDS=[], SUPPLY_OVERRIDES=[];
 let PLAN_YEAR=CUR_YEAR, PLAN_MONTH=CUR_MONTH, PLAN_VIEW='deliveries';
 let NEXT_PLAN_DATA=[], NEXT_PLAN_NEEDS=[], NEXT_PLAN_OVERRIDES=[], NEXT_PLAN_LOADED=false;
+let NEXT_PLAN_ERROR='';
 let YEAR_DAY_DATA=[], YEAR_OPEN_BAL=[], YEAR_MONTHLY_NEEDS=[];
 let OB_YEAR=CUR_YEAR, OB_MONTH=CUR_MONTH, OB_DAY=1;
 
@@ -1688,8 +1689,19 @@ async function loadNextPlan(){
 async function setPlanPeriod(value){
   if(value==='next'){
     const next=nextPlanPeriod(); PLAN_YEAR=next.year; PLAN_MONTH=next.month;
-    try{await loadNextPlan();await syncSupplyPlan();}
-    catch(e){PLAN_YEAR=CUR_YEAR;PLAN_MONTH=CUR_MONTH;toast('Не удалось загрузить план: '+e.message);}
+    NEXT_PLAN_ERROR='';
+    renderPlan();
+    try{
+      await loadNextPlan();
+      renderPlan();
+      syncSupplyPlan(undefined,next.year,next.month).catch(e=>{
+        console.warn('Supply plan save error:',e);
+        toast('Не удалось сохранить расчётный план. Данные на экране доступны.');
+      });
+    }catch(e){
+      NEXT_PLAN_ERROR=e.message||String(e);
+      renderPlan();
+    }
   }else{PLAN_YEAR=CUR_YEAR;PLAN_MONTH=CUR_MONTH;}
   renderPlan();
 }
@@ -1764,7 +1776,16 @@ let LAST_SUPPLY_PLANS=[];
 function renderPlan(){
   const next=isNextPlan();
   if(next&&!NEXT_PLAN_LOADED){
-    document.getElementById('pg-plan').innerHTML=`${siteToggleHtml()}<div class="alert alert-info">Загрузка плана следующего месяца...</div>`;
+    const monthNames=['','Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+    document.getElementById('pg-plan').innerHTML=`${siteToggleHtml()}
+      <div class="sec"><div class="sec-head">План поставок · ${monthNames[PLAN_MONTH]} ${PLAN_YEAR}</div><div class="sec-body">
+        <div class="plan-segment" style="margin-bottom:10px">
+          <button onclick="setPlanPeriod('current')">${monthNames[CUR_MONTH]}</button>
+          <button class="on" onclick="setPlanPeriod('next')">${monthNames[PLAN_MONTH]}</button>
+        </div>
+        ${NEXT_PLAN_ERROR?'<div class="alert alert-err">Не удалось загрузить план: <span id="next-plan-error"></span></div><button class="btn btn-ghost btn-sm" onclick="setPlanPeriod(\'next\')">Повторить</button>':'<div class="alert alert-info">Загрузка плана...</div>'}
+      </div></div>`;
+    if(NEXT_PLAN_ERROR)document.getElementById('next-plan-error').textContent=NEXT_PLAN_ERROR;
     return;
   }
   const plans=planFeeds().map(f=>calculateFeedPlan(f,PLAN_YEAR,PLAN_MONTH));
