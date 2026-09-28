@@ -150,8 +150,9 @@ body::before {
 .plan-calendar th { height:30px; color:var(--muted); background:var(--s2); font-weight:900; }
 .plan-calendar .plan-feed-col { position:sticky; left:0; z-index:3; width:132px; min-width:132px; max-width:132px; padding:7px 8px; text-align:left; background:var(--s1); color:var(--text); font-size:10px; line-height:1.25; overflow-wrap:anywhere; }
 .plan-calendar thead .plan-feed-col { z-index:4; background:var(--s2); }
-.plan-day-btn { width:35px; height:35px; border:1px solid transparent; border-radius:7px; padding:2px; font:800 10px var(--f-body); cursor:pointer; color:#141a0e; line-height:1.05; }
+.plan-day-btn { position:relative; width:35px; height:35px; border:1px solid transparent; border-radius:7px; padding:2px; font:800 10px var(--f-body); cursor:pointer; color:#141a0e; line-height:1.05; }
 .plan-day-btn span { display:block; font-size:8px; margin-top:2px; }
+.plan-day-btn.plan-editable::after { content:'✎'; position:absolute; right:2px; top:1px; font-size:10px; line-height:1; }
 .plan-future { background:var(--gold); border-color:var(--gold2); }
 .plan-done { background:var(--lime); border-color:#6fa828; }
 .plan-overdue { background:var(--red); border-color:#b92d1d; color:white; }
@@ -159,6 +160,9 @@ body::before {
 .plan-manual { box-shadow:inset 0 0 0 2px rgba(255,255,255,.55); }
 .plan-legend { display:flex; flex-wrap:wrap; gap:9px; margin:9px 0 2px; color:var(--muted); font-size:9px; font-weight:800; }
 .plan-legend i { width:9px; height:9px; border-radius:2px; display:inline-block; margin-right:3px; vertical-align:-1px; }
+.plan-segment { display:grid; grid-template-columns:1fr 1fr; gap:2px; padding:3px; background:var(--s2); border:1px solid var(--border); border-radius:8px; }
+.plan-segment button { min-height:36px; border:0; border-radius:6px; background:transparent; color:var(--muted); font:800 12px var(--f-body); cursor:pointer; }
+.plan-segment button.on { background:var(--s1); color:var(--text); }
 
 /* ---- PAGES ---- */
 .pages { flex:1; overflow:hidden; position:relative; z-index:1; }
@@ -795,6 +799,8 @@ let curPage = 'dash';
 let ME = null;
 
 let FEEDS=[], DAY_DATA=[], OPEN_BAL=[], EDIT_OPEN_BAL=[], LOGS=[], USERS=[], MONTHLY_NEEDS=[], SUPPLY_OVERRIDES=[];
+let PLAN_YEAR=CUR_YEAR, PLAN_MONTH=CUR_MONTH, PLAN_VIEW='deliveries';
+let NEXT_PLAN_DATA=[], NEXT_PLAN_NEEDS=[], NEXT_PLAN_OVERRIDES=[], NEXT_PLAN_LOADED=false;
 let YEAR_DAY_DATA=[], YEAR_OPEN_BAL=[], YEAR_MONTHLY_NEEDS=[];
 let OB_YEAR=CUR_YEAR, OB_MONTH=CUR_MONTH, OB_DAY=1;
 
@@ -1085,6 +1091,11 @@ async function reloadDayData(includeStatic=false){
     localStorage.setItem('year_day_data',JSON.stringify(YEAR_DAY_DATA));
     localStorage.setItem('logs',JSON.stringify(LOGS));
     localStorage.setItem('supply_overrides',JSON.stringify(SUPPLY_OVERRIDES));
+    if(isNextPlan())await loadNextPlan();
+    if(ME&&ME.role==='admin'){
+      await syncSupplyPlan(undefined,CUR_YEAR,CUR_MONTH);
+      if(isNextPlan())await syncSupplyPlan(undefined,PLAN_YEAR,PLAN_MONTH);
+    }
   } catch(e){}
 }
 
@@ -1169,6 +1180,7 @@ function goPage(page, el){
 function setSite(s){
   if (!CAN.otherSite(ME && ME.role, ME && ME.site, s)) { toast('🔒 Нет доступа к этой площадке'); return; }
   curSite=s;
+  NEXT_PLAN_LOADED=false;
   localStorage.setItem('curSite', s);
   document.querySelectorAll('.site-btn').forEach(b=>b.classList.toggle('on',b.dataset.s===s));
   reloadDayData(true).then(()=>loadEditOpenBalances()).then(()=>{render();return ensureSupplyPlanSaved();});
@@ -1197,8 +1209,10 @@ async function refreshData(){
     localStorage.setItem('logs',JSON.stringify(LOGS));
     localStorage.setItem('monthly_needs',JSON.stringify(MONTHLY_NEEDS));
     localStorage.setItem('supply_overrides',JSON.stringify(SUPPLY_OVERRIDES));
+    if(isNextPlan())await loadNextPlan();
     render();
     ensureSupplyPlanSaved();
+    if(isNextPlan())syncSupplyPlan(undefined,PLAN_YEAR,PLAN_MONTH).catch(e=>console.warn('Plan sync:',e));
     toast('✅ Данные обновлены');
   } catch(e) {
     toast('❌ Ошибка обновления: '+e.message);
@@ -1532,32 +1546,56 @@ function shortDate(d){
   return d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'});
 }
 
-function planDate(day){
-  return `${String(day).padStart(2,'0')}.${String(CUR_MONTH).padStart(2,'0')}.${CUR_YEAR}`;
+function planDate(day,year=PLAN_YEAR,month=PLAN_MONTH){
+  return `${String(day).padStart(2,'0')}.${String(month).padStart(2,'0')}.${year}`;
 }
 
-function actualIntakeAround(feedId,day){
-  let total=0;
-  for(let d=Math.max(1,day-2);d<=Math.min(daysInMonth(),day+2);d++){
-    total+=Number(getDayRec(feedId,d).intake||0);
-  }
-  return total;
+function nextPlanPeriod(){
+  return CUR_MONTH===12?{year:CUR_YEAR+1,month:1}:{year:CUR_YEAR,month:CUR_MONTH+1};
+}
+function isNextPlan(year=PLAN_YEAR,month=PLAN_MONTH){
+  const next=nextPlanPeriod();
+  return year===next.year&&month===next.month;
+}
+function planDays(year=PLAN_YEAR,month=PLAN_MONTH){return new Date(year,month,0).getDate();}
+function planRows(year=PLAN_YEAR,month=PLAN_MONTH){return isNextPlan(year,month)?NEXT_PLAN_DATA:DAY_DATA;}
+function planOverrides(year=PLAN_YEAR,month=PLAN_MONTH){return isNextPlan(year,month)?NEXT_PLAN_OVERRIDES:SUPPLY_OVERRIDES;}
+function planRecord(feedId,day,year=PLAN_YEAR,month=PLAN_MONTH){
+  return planRows(year,month).find(x=>x.feed_id===feedId&&x.site===curSite&&Number(x.day)===day)||{intake:0,expense:0};
+}
+function planNeed(feed,year=PLAN_YEAR,month=PLAN_MONTH){
+  if(!isNextPlan(year,month))return monthlyNeed(feed);
+  const row=NEXT_PLAN_NEEDS.find(x=>x.feed_id===feed.id&&x.site===curSite);
+  return row?Number(row.per_month_t||0):monthlyNeed(feed);
+}
+function planFeeds(year=PLAN_YEAR,month=PLAN_MONTH){
+  return uniqueFeedsByName(FEEDS.filter(f=>f.active!==false&&planNeed(f,year,month)>0));
+}
+function planStartBalance(feed,year,month){
+  if(!isNextPlan(year,month))return balStart(feed.id,1);
+  const opening=NEXT_PLAN_OPEN_BAL.find(x=>x.feed_id===feed.id&&x.site===curSite&&Number(x.day||1)===1);
+  return opening?Number(opening.opening_balance||0):calculateFeedPlan(feed,CUR_YEAR,CUR_MONTH).endBalance;
+}
+let NEXT_PLAN_OPEN_BAL=[];
+function planOpening(feedId,day,year,month){
+  const rows=isNextPlan(year,month)?NEXT_PLAN_OPEN_BAL:OPEN_BAL;
+  return rows.find(x=>x.feed_id===feedId&&x.site===curSite&&Number(x.day||1)===day);
 }
 
-function applyPlanDay(feed,day,balance){
-  const rec=getDayRec(feed.id,day);
+function applyPlanDay(feed,day,balance,year,month){
+  const rec=planRecord(feed.id,day,year,month);
   let next=balance+Number(rec.intake||0);
-  next-=Number(rec.expense||0)>0?Number(rec.expense):dailyNorm(feed);
+  next-=Number(rec.expense||0)>0?Number(rec.expense):planNeed(feed,year,month)/planDays(year,month);
   if(rec.adjustment_balance!==undefined&&rec.adjustment_balance!==null&&rec.adjustment_balance!==''){
     next=Number(rec.adjustment_balance);
   }
   return next;
 }
 
-function allocatePlanFacts(feedId,events){
+function allocatePlanFacts(feedId,events,year,month){
   const buckets=[];
-  for(let day=1;day<=daysInMonth();day++){
-    const amount=Number(getDayRec(feedId,day).intake||0);
+  for(let day=1;day<=planDays(year,month);day++){
+    const amount=Number(planRecord(feedId,day,year,month).intake||0);
     if(amount>0) buckets.push({day,remaining:amount});
   }
   events.forEach(ev=>{ev.fact=0;});
@@ -1581,148 +1619,211 @@ function allocatePlanFacts(feedId,events){
   });
 }
 
-function calculateFeedPlan(feed){
-  const dim=daysInMonth();
-  const overrides=SUPPLY_OVERRIDES
-    .filter(x=>x.feed_id===feed.id&&x.site===curSite&&Number(x.year)===CUR_YEAR&&Number(x.month)===CUR_MONTH)
+function calculateFeedPlan(feed,year=PLAN_YEAR,month=PLAN_MONTH){
+  const dim=planDays(year,month);
+  const cutoff=isNextPlan(year,month)?0:CUR_DAY;
+  const overrides=planOverrides(year,month)
+    .filter(x=>x.feed_id===feed.id&&x.site===curSite&&Number(x.year)===year&&Number(x.month)===month)
     .sort((a,b)=>Number(a.plan_index)-Number(b.plan_index));
-  const overrideEvents=overrides.map(x=>({
+  const fixedEvents=overrides.filter(x=>x.is_manual===true||Number(x.delivery_day)<cutoff).map(x=>({
     index:Number(x.plan_index),day:Number(x.delivery_day),qty:SUPPLY_BATCH_T,fact:0,
     manual:x.is_manual===true,persisted:true
   }));
-  allocatePlanFacts(feed.id,overrideEvents);
+  allocatePlanFacts(feed.id,fixedEvents,year,month);
   const events=[];
   const riskDays=[];
+  const usedIndexes=new Set(fixedEvents.map(x=>x.index));
   let nextIndex=1;
-  let balance=balStart(feed.id,1);
+  let balance=planStartBalance(feed,year,month);
 
   for(let day=1;day<=dim;day++){
-    let deliveredToday=false;
-    const forced=overrideEvents.find(x=>x.index===nextIndex);
-    // Если администратор перенёс две машины на одну дату, вторая автоматически
-    // переходит на следующий день: по одному ингредиенту не более одной машины в день.
-    if(forced&&forced.day<=day){
-      const qty=SUPPLY_BATCH_T;
-      const fact=forced.fact;
-      // Фактический приход уже учтён в day_records. План добавляем только пока факта нет.
-      if(fact<=0) balance+=qty;
-      events.push({...forced,day,qty,fact});
-      nextIndex++;
-      deliveredToday=true;
+    if(day>1){
+      const opening=planOpening(feed.id,day,year,month);
+      if(opening)balance=Number(opening.opening_balance||0);
     }
-
-    const projected=applyPlanDay(feed,day,balance);
+    const fixed=fixedEvents.filter(x=>x.day===day);
+    fixed.forEach(ev=>{
+      events.push({...ev});
+      // Факт уже попал в дневные записи. В прогноз добавляем лишь недопоставленную часть.
+      if(day>=cutoff)balance+=Math.max(0,ev.qty-ev.fact);
+    });
+    const projected=applyPlanDay(feed,day,balance,year,month);
     const needsDelivery=projected<0||(projected<=0&&day<dim);
-    if(needsDelivery&&!deliveredToday){
-      const waiting=overrideEvents.find(x=>x.index===nextIndex&&x.day>day);
+    if(day>=cutoff&&needsDelivery&&!fixed.length){
+      const waiting=fixedEvents.find(x=>x.manual&&x.day>day);
       if(waiting){
         riskDays.push(day);
       }else{
         balance+=SUPPLY_BATCH_T;
+        while(usedIndexes.has(nextIndex))nextIndex++;
         events.push({index:nextIndex,day,qty:SUPPLY_BATCH_T,fact:0,manual:false,persisted:false});
+        usedIndexes.add(nextIndex);
         nextIndex++;
-        deliveredToday=true;
       }
     }
-    balance=applyPlanDay(feed,day,balance);
+    balance=applyPlanDay(feed,day,balance,year,month);
     if(balance<0&&!riskDays.includes(day)) riskDays.push(day);
   }
-  allocatePlanFacts(feed.id,events);
   return {feed,events,riskDays,endBalance:balance};
 }
 
-let SUPPLY_PLAN_SYNCING=false;
+let SUPPLY_PLAN_SYNC_QUEUE=Promise.resolve();
 
-async function loadSupplyPlanRows(){
-  SUPPLY_OVERRIDES=await sbGet('supply_plan_overrides',`year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&site=eq.${curSite}`);
-  localStorage.setItem('supply_overrides',JSON.stringify(SUPPLY_OVERRIDES));
+async function loadNextPlan(){
+  const {year,month}=nextPlanPeriod();
+  NEXT_PLAN_LOADED=false;
+  const site=curSite;
+  const [records,needs,overrides,opening]=await Promise.all([
+    sbGet('day_records',`year=eq.${year}&month=eq.${month}&site=eq.${site}`),
+    sbGet('monthly_needs',`year=eq.${year}&month=eq.${month}&site=eq.${site}`),
+    sbGet('supply_plan_overrides',`year=eq.${year}&month=eq.${month}&site=eq.${site}`),
+    sbGet('opening_balances',`year=eq.${year}&month=eq.${month}&site=eq.${site}`)
+  ]);
+  if(site!==curSite)return;
+  NEXT_PLAN_DATA=records||[]; NEXT_PLAN_NEEDS=needs||[];
+  NEXT_PLAN_OVERRIDES=overrides||[]; NEXT_PLAN_OPEN_BAL=opening||[];
+  NEXT_PLAN_LOADED=true;
 }
 
-async function persistCalculatedPlans(feedIds){
-  const ids=feedIds&&feedIds.length?feedIds:activeFeeds().map(f=>f.id);
+async function setPlanPeriod(value){
+  if(value==='next'){
+    const next=nextPlanPeriod(); PLAN_YEAR=next.year; PLAN_MONTH=next.month;
+    try{await loadNextPlan();await syncSupplyPlan();}
+    catch(e){PLAN_YEAR=CUR_YEAR;PLAN_MONTH=CUR_MONTH;toast('Не удалось загрузить план: '+e.message);}
+  }else{PLAN_YEAR=CUR_YEAR;PLAN_MONTH=CUR_MONTH;}
+  renderPlan();
+}
+
+function setPlanView(view){
+  if(view==='orders'&&(!ME||ME.role!=='admin'))return;
+  PLAN_VIEW=view; renderPlan();
+}
+
+async function loadSupplyPlanRows(year=PLAN_YEAR,month=PLAN_MONTH){
+  const rows=await sbGet('supply_plan_overrides',`year=eq.${year}&month=eq.${month}&site=eq.${curSite}`);
+  if(isNextPlan(year,month))NEXT_PLAN_OVERRIDES=rows;
+  else{SUPPLY_OVERRIDES=rows;localStorage.setItem('supply_overrides',JSON.stringify(rows));}
+}
+
+async function syncSupplyPlan(feedIds,year=PLAN_YEAR,month=PLAN_MONTH){
+  if(!ME||ME.role!=='admin'||isNextPlan(year,month)&&!NEXT_PLAN_LOADED)return;
+  const site=curSite;
+  const next=SUPPLY_PLAN_SYNC_QUEUE.catch(()=>{}).then(()=>{
+    if(site===curSite)return persistCalculatedPlans(feedIds,year,month);
+  });
+  SUPPLY_PLAN_SYNC_QUEUE=next;
+  return next;
+}
+
+async function persistCalculatedPlans(feedIds,year=PLAN_YEAR,month=PLAN_MONTH){
+  const ids=feedIds&&feedIds.length?feedIds:planFeeds(year,month).map(f=>f.id);
+  const cutoff=isNextPlan(year,month)?0:CUR_DAY;
   const rows=[];
+  const existing=planOverrides(year,month);
+  const stale=[];
   ids.forEach(feedId=>{
     const feed=FEEDS.find(f=>f.id===feedId); if(!feed)return;
-    const plan=calculateFeedPlan(feed);
-    plan.events.forEach(ev=>{
-      const exists=SUPPLY_OVERRIDES.some(x=>x.feed_id===feedId&&Number(x.plan_index)===ev.index);
-      if(!exists) rows.push({
-        site:curSite,year:CUR_YEAR,month:CUR_MONTH,feed_id:feedId,plan_index:ev.index,
+    const plan=calculateFeedPlan(feed,year,month);
+    const generated=plan.events.filter(ev=>!ev.manual&&ev.day>=cutoff);
+    const generatedIndexes=new Set(generated.map(ev=>ev.index));
+    existing.filter(x=>x.feed_id===feedId&&x.is_manual!==true&&Number(x.delivery_day)>=cutoff)
+      .forEach(x=>{if(!generatedIndexes.has(Number(x.plan_index)))stale.push(x);});
+    generated.forEach(ev=>{
+      const old=existing.find(x=>x.feed_id===feedId&&Number(x.plan_index)===ev.index);
+      if(!old||Number(old.delivery_day)!==ev.day)rows.push({
+        site:curSite,year,month,feed_id:feedId,plan_index:ev.index,
         delivery_day:ev.day,quantity:SUPPLY_BATCH_T,is_manual:false,updated_at:new Date().toISOString()
       });
     });
   });
   if(rows.length) await sbUpsert('supply_plan_overrides',rows,'site,year,month,feed_id,plan_index');
-  await loadSupplyPlanRows();
+  for(const row of stale)await sbDelete('supply_plan_overrides',`id=eq.${row.id}`);
+  if(rows.length||stale.length)await loadSupplyPlanRows(year,month);
 }
 
 async function ensureSupplyPlanSaved(){
-  if(SUPPLY_PLAN_SYNCING||!ME||ME.role!=='admin')return;
-  const missing=activeFeeds().filter(f=>!SUPPLY_OVERRIDES.some(x=>x.feed_id===f.id)).map(f=>f.id);
-  if(!missing.length)return;
-  SUPPLY_PLAN_SYNCING=true;
+  if(!ME||ME.role!=='admin')return;
   try{
-    await persistCalculatedPlans(missing);
+    await syncSupplyPlan(undefined,CUR_YEAR,CUR_MONTH);
     renderPlan();
   }catch(e){
     console.warn('Supply plan save error:',e.message);
-  }finally{SUPPLY_PLAN_SYNCING=false;}
+  }
 }
 
 async function rebuildSupplyPlan(){
   if(!ME||ME.role!=='admin'){toast('Только администратор может пересчитать план');return;}
-  if(!confirm('Пересчитать будущий график поставок по текущим остаткам и потребности? Ручные даты сохранятся.'))return;
-  SUPPLY_PLAN_SYNCING=true;
   try{
-    await sbDelete('supply_plan_overrides',`site=eq.${curSite}&year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&is_manual=eq.false`);
-    await loadSupplyPlanRows();
-    await persistCalculatedPlans(activeFeeds().map(f=>f.id));
+    await syncSupplyPlan();
     renderPlan(); toast('План месяца пересчитан');
   }catch(e){toast('Ошибка пересчёта: '+e.message);}
-  finally{SUPPLY_PLAN_SYNCING=false;}
 }
 
 let LAST_SUPPLY_PLANS=[];
 
 function renderPlan(){
-  const plans=activeFeeds().map(calculateFeedPlan);
+  const next=isNextPlan();
+  if(next&&!NEXT_PLAN_LOADED){
+    document.getElementById('pg-plan').innerHTML=`${siteToggleHtml()}<div class="alert alert-info">Загрузка плана следующего месяца...</div>`;
+    return;
+  }
+  const plans=planFeeds().map(f=>calculateFeedPlan(f,PLAN_YEAR,PLAN_MONTH));
   LAST_SUPPLY_PLANS=plans;
   let thead='<tr><th class="plan-feed-col">Ингредиент</th>';
-  for(let day=1;day<=daysInMonth();day++){
-    thead+=`<th style="${day===CUR_DAY?'color:var(--gold);background:var(--s3)':''}">${day}</th>`;
+  for(let day=1;day<=planDays();day++){
+    thead+=`<th style="${!next&&day===CUR_DAY?'color:var(--gold);background:var(--s3)':''}">${day}</th>`;
   }
   thead+='</tr>';
   const tbody=plans.map(plan=>{
     let cells='';
-    for(let day=1;day<=daysInMonth();day++){
+    for(let day=1;day<=planDays();day++){
       const ev=plan.events.find(x=>x.day===day);
       if(!ev){cells+='<td></td>';continue;}
       const done=ev.fact+0.005>=ev.qty;
-      const overdue=day<CUR_DAY&&!done;
+      const overdue=!next&&day<CUR_DAY&&!done;
       const status=done?'plan-done':overdue?'plan-overdue':ev.fact>0?'plan-partial':'plan-future';
       const sub=done?'✓':overdue?'срок':ev.fact>0?`ф ${fmt(ev.fact)}`:'план';
-      cells+=`<td><button class="plan-day-btn ${status} ${ev.manual?'plan-manual':''}" onclick="showPlanEvent('${plan.feed.id}',${ev.index})">20<span>${sub}</span></button></td>`;
+      const canEdit=ME&&ME.role==='admin'&&(next||day>=CUR_DAY);
+      const action=canEdit
+        ? `showPlanEdit('${plan.feed.id}',${ev.index},${ev.day},${ev.qty})`
+        : `showPlanEvent('${plan.feed.id}',${ev.index})`;
+      const label=`${canEdit?'Изменить дату':'Посмотреть поставку'} ${planDate(day)}, ${fmt(ev.qty)} т`;
+      cells+=`<td><button class="plan-day-btn ${status} ${ev.manual?'plan-manual':''} ${canEdit?'plan-editable':''}" title="${label}" aria-label="${label}" onclick="${action}">20<span>${sub}</span></button></td>`;
     }
     return `<tr><td class="plan-feed-col">${feedIco(plan.feed.name)} ${plan.feed.name}</td>${cells}</tr>`;
   }).join('');
   const planned=plans.reduce((s,p)=>s+p.events.reduce((x,e)=>x+Number(e.qty||0),0),0);
-  const fact=plans.reduce((s,p)=>s+p.events.reduce((x,e)=>x+Number(e.fact||0),0),0);
-  const remaining=plans.reduce((s,p)=>s+p.events.reduce((x,e)=>x+Math.max(0,Number(e.qty||0)-Number(e.fact||0)),0),0);
+  const feedIds=new Set(plans.map(p=>p.feed.id));
+  const fact=planRows().filter(x=>feedIds.has(x.feed_id)).reduce((s,x)=>s+Number(x.intake||0),0);
+  const cutoff=next?0:CUR_DAY;
+  const remaining=plans.reduce((s,p)=>s+p.events.filter(e=>e.day>=cutoff).reduce((x,e)=>x+Math.max(0,Number(e.qty||0)-Number(e.fact||0)),0),0);
   const trips=plans.reduce((s,p)=>s+p.events.length,0);
   const mnames=['','Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+  const orderRows=plans.flatMap(plan=>plan.events.map(ev=>({feed:plan.feed,ev,date:subtractWorkingDays(PLAN_YEAR,PLAN_MONTH,ev.day,5)})))
+    .sort((a,b)=>a.date-b.date||a.feed.name.localeCompare(b.feed.name,'ru'));
   document.getElementById('pg-plan').innerHTML=`
     ${siteToggleHtml()}
     <div class="sec">
-      <div class="sec-head"><span class="ico">📦</span>План поставок · ${mnames[CUR_MONTH]} ${CUR_YEAR}</div>
+      <div class="sec-head"><span class="ico">📦</span>План поставок · ${mnames[PLAN_MONTH]} ${PLAN_YEAR}</div>
       <div class="sec-body">
+        <div class="plan-segment" style="margin-bottom:10px">
+          <button class="${!next?'on':''}" onclick="setPlanPeriod('current')">${mnames[CUR_MONTH]}</button>
+          <button class="${next?'on':''}" onclick="setPlanPeriod('next')">${mnames[nextPlanPeriod().month]}</button>
+        </div>
+        ${ME&&ME.role==='admin'?`<div class="plan-segment" style="margin-bottom:10px"><button class="${PLAN_VIEW==='deliveries'?'on':''}" onclick="setPlanView('deliveries')">Поставки</button><button class="${PLAN_VIEW==='orders'?'on':''}" onclick="setPlanView('orders')">Заявки</button></div>`:''}
+        ${next&&!NEXT_PLAN_NEEDS.length?'<div class="alert alert-warn">Потребность на этот месяц ещё не задана. План предварительный, рассчитан по потребности текущего месяца.</div>':''}
+        ${next&&ME&&ME.role==='admin'?'<button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:10px" onclick="showNextPlanNeeds()">Потребность на месяц</button>':''}
+        ${PLAN_VIEW==='orders'&&ME&&ME.role==='admin'?`
+          <div class="alert alert-info">Расчётная дата заявки: за 5 рабочих дней до поставки.</div>
+          <div class="plan-calendar"><table><thead><tr><th class="plan-feed-col">Ингредиент</th><th>Заявка</th><th>Поставка</th><th>Тонн</th></tr></thead><tbody>${orderRows.map(x=>`<tr><td class="plan-feed-col">${feedIco(x.feed.name)} ${x.feed.name}</td><td>${shortDate(x.date)}</td><td>${planDate(x.ev.day)}</td><td>${fmt(x.ev.qty)}</td></tr>`).join('')}</tbody></table></div>
+        `:`
         <div class="plan-stats">
           <div class="stat-box"><div class="stat-box-val" style="color:var(--gold)">${fmt(planned)}</div><div class="stat-box-lbl">План, т</div></div>
           <div class="stat-box"><div class="stat-box-val" style="color:var(--lime)">${fmt(fact)}</div><div class="stat-box-lbl">Факт, т</div></div>
-          <div class="stat-box"><div class="stat-box-val" style="color:var(--red)">${fmt(remaining)}</div><div class="stat-box-lbl">Осталось, т</div></div>
+          <div class="stat-box"><div class="stat-box-val" style="color:var(--red)">${fmt(remaining)}</div><div class="stat-box-lbl">К поставке, т</div></div>
           <div class="stat-box"><div class="stat-box-val" style="color:var(--cream)">${trips}</div><div class="stat-box-lbl">Поставок</div></div>
         </div>
-        ${ME&&ME.role==='admin'?'<button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:10px" onclick="rebuildSupplyPlan()">Пересчитать график</button>':''}
-        <div class="alert alert-info" style="font-size:11px">Каждая поставка — 20 т, не более одной машины по ингредиенту в день. Следующая дата рассчитывается после ежедневного списания потребности. Заказать нужно за 5 рабочих дней.</div>
+        <div class="alert alert-info" style="font-size:11px">Каждая поставка — 20 т. Будущие даты пересчитываются при изменении остатка, прихода и потребности.</div>
         <div class="plan-legend">
           <span><i style="background:var(--gold)"></i>План</span>
           <span><i style="background:var(--lime)"></i>Выполнено</span>
@@ -1730,6 +1831,8 @@ function renderPlan(){
           <span><i style="background:var(--sky)"></i>Частично</span>
         </div>
         ${plans.length?`<div class="plan-calendar"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`:'<div class="alert alert-info">Нет ингредиентов с потребностью</div>'}
+        ${plans.some(p=>p.riskDays.length)?'<div class="alert alert-err" style="margin-top:10px">Есть дни с нехваткой до поставки. Проверьте вручную перенесённые даты.</div>':''}
+        `}
       </div>
     </div>`;
 }
@@ -1737,10 +1840,9 @@ function renderPlan(){
 function showPlanEvent(feedId,index){
   const plan=LAST_SUPPLY_PLANS.find(p=>p.feed.id===feedId);
   const ev=plan&&plan.events.find(x=>x.index===index); if(!plan||!ev)return;
-  const orderDate=subtractWorkingDays(CUR_YEAR,CUR_MONTH,ev.day,5);
   const diff=Number(ev.fact||0)-Number(ev.qty||0);
   const done=ev.fact+0.005>=ev.qty;
-  const overdue=ev.day<CUR_DAY&&!done;
+  const overdue=!isNextPlan()&&ev.day<CUR_DAY&&!done;
   const status=done?'Поставка выполнена':overdue?'Поставка просрочена':ev.fact>0?'Поставка выполнена частично':'Поставка запланирована';
   const statusClass=done?'alert-ok':overdue?'alert-err':ev.fact>0?'alert-info':'alert-warn';
   document.getElementById('modal-content').innerHTML=`
@@ -1752,21 +1854,32 @@ function showPlanEvent(feedId,index){
       <div class="plan-cell"><div class="plan-label">Факт</div><div class="plan-value">${fmt(ev.fact)} т</div></div>
       <div class="plan-cell"><div class="plan-label">Разница</div><div class="plan-value" style="color:${diff<0?'var(--red)':'var(--lime)'}">${diff>0?'+':''}${fmt(diff)} т</div></div>
     </div>
-    <div class="alert alert-warn">Заказать до ${shortDate(orderDate)}</div>
-    ${ME&&ME.role==='admin'?`<button class="btn btn-gold" onclick="showPlanEdit('${feedId}',${index},${ev.day},${ev.qty})" style="margin-bottom:8px">Изменить дату</button>`:''}
+    ${ME&&ME.role==='admin'&&(isNextPlan()||ev.day>=CUR_DAY)?`<button class="btn btn-gold" onclick="showPlanEdit('${feedId}',${index},${ev.day},${ev.qty})" style="margin-bottom:8px">Изменить дату</button>`:''}
     <button class="btn btn-ghost" onclick="closeModal()">Закрыть</button>`;
   document.getElementById('modal-bg').classList.add('show');
 }
 
 function showPlanEdit(feedId,index,day,qty){
   if(!ME||ME.role!=='admin'){toast('Только администратор может менять план');return;}
+  if(!isNextPlan()&&day<CUR_DAY){toast('Прошедшую поставку менять нельзя');return;}
   const feed=FEEDS.find(x=>x.id===feedId); if(!feed)return;
-  const dateValue=`${CUR_YEAR}-${String(CUR_MONTH).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  const plan=LAST_SUPPLY_PLANS.find(p=>p.feed.id===feedId);
+  const event=plan&&plan.events.find(x=>x.index===index);
+  const fact=event?Number(event.fact||0):0;
+  const diff=fact-SUPPLY_BATCH_T;
+  const orderDate=subtractWorkingDays(PLAN_YEAR,PLAN_MONTH,day,5);
+  const dateValue=`${PLAN_YEAR}-${String(PLAN_MONTH).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
   document.getElementById('modal-content').innerHTML=`
     <div class="modal-title">Изменить план поставки</div>
     <div class="alert alert-info">${feedIco(feed.name)} <b>${feed.name}</b></div>
-    <div class="form-group"><label>Дата поставки</label><input type="date" id="plan-date" value="${dateValue}" min="${CUR_YEAR}-${String(CUR_MONTH).padStart(2,'0')}-01" max="${CUR_YEAR}-${String(CUR_MONTH).padStart(2,'0')}-${String(daysInMonth()).padStart(2,'0')}"></div>
-    <div class="form-group"><label>Количество — одна поставка</label><input type="number" id="plan-qty" value="${SUPPLY_BATCH_T}" readonly></div>
+    <div class="plan-grid" style="margin-bottom:14px">
+      <div class="plan-cell"><div class="plan-label">План</div><div class="plan-value">${fmt(SUPPLY_BATCH_T)} т</div></div>
+      <div class="plan-cell"><div class="plan-label">Факт</div><div class="plan-value">${fmt(fact)} т</div></div>
+      <div class="plan-cell"><div class="plan-label">Разница</div><div class="plan-value" style="color:${diff<0?'var(--red)':'var(--lime)'}">${diff>0?'+':''}${fmt(diff)} т</div></div>
+    </div>
+    <div class="alert alert-warn">Заказать до ${shortDate(orderDate)}</div>
+    <div class="form-group"><label>Дата поставки</label><input type="date" id="plan-date" value="${dateValue}" min="${PLAN_YEAR}-${String(PLAN_MONTH).padStart(2,'0')}-01" max="${PLAN_YEAR}-${String(PLAN_MONTH).padStart(2,'0')}-${String(planDays()).padStart(2,'0')}"></div>
+    <div class="alert alert-info">Одна поставка — ${SUPPLY_BATCH_T} т. После переноса следующие даты пересчитаются.</div>
     <div id="plan-msg"></div>
     <button class="btn btn-gold" onclick="savePlanOverride('${feedId}',${index})" style="margin-bottom:8px">Сохранить и пересчитать</button>
     <button class="btn btn-danger" onclick="resetPlanOverride('${feedId}',${index})" style="margin-bottom:8px">Вернуть автоматический расчёт</button>
@@ -1774,29 +1887,71 @@ function showPlanEdit(feedId,index,day,qty){
   document.getElementById('modal-bg').classList.add('show');
 }
 
+function showNextPlanNeeds(){
+  if(!ME||ME.role!=='admin'||!isNextPlan()||!NEXT_PLAN_LOADED)return;
+  const rows=FEEDS.filter(f=>f.active!==false).map(f=>{
+    const current=NEXT_PLAN_NEEDS.find(x=>x.feed_id===f.id);
+    const value=current?Number(current.per_month_t||0):monthlyNeed(f);
+    return `<div class="form-group"><label>${feedIco(f.name)} ${f.name}</label><input class="next-plan-need" data-feed-id="${f.id}" type="number" min="0" step="0.001" inputmode="decimal" value="${value}"></div>`;
+  }).join('');
+  document.getElementById('modal-content').innerHTML=`
+    <div class="modal-title">Потребность · ${String(PLAN_MONTH).padStart(2,'0')}.${PLAN_YEAR}</div>
+    ${rows}<div id="plan-needs-msg"></div>
+    <button class="btn btn-gold" onclick="saveNextPlanNeeds()" style="margin-bottom:8px">Сохранить потребность</button>
+    <button class="btn btn-ghost" onclick="closeModal()">Отмена</button>`;
+  document.getElementById('modal-bg').classList.add('show');
+}
+
+async function saveNextPlanNeeds(){
+  if(!ME||ME.role!=='admin'||!isNextPlan())return;
+  const inputs=[...document.querySelectorAll('.next-plan-need')];
+  const rows=[];
+  for(const input of inputs){
+    const value=Number(input.value.replace(',','.'));
+    if(!Number.isFinite(value)||value<0){
+      document.getElementById('plan-needs-msg').innerHTML='<div class="alert alert-err">Проверьте количества</div>';return;
+    }
+    rows.push({feed_id:input.dataset.feedId,site:curSite,year:PLAN_YEAR,month:PLAN_MONTH,per_month_t:value});
+  }
+  const msg=document.getElementById('plan-needs-msg');
+  msg.innerHTML='<div class="alert alert-info"><span class="spin"></span> Сохранение...</div>';
+  try{
+    if(rows.length)await sbUpsert('monthly_needs',rows,'feed_id,site,year,month');
+    await loadNextPlan();
+    await syncSupplyPlan(undefined,PLAN_YEAR,PLAN_MONTH);
+    closeModal();renderPlan();toast('Потребность сохранена');
+  }catch(e){msg.innerHTML=`<div class="alert alert-err">${e.message}</div>`;}
+}
+
 async function savePlanOverride(feedId,index){
   const msg=document.getElementById('plan-msg');
   const d=parseDateInput(document.getElementById('plan-date').value);
   const qty=SUPPLY_BATCH_T;
-  if(!d||d.getFullYear()!==CUR_YEAR||d.getMonth()+1!==CUR_MONTH){msg.innerHTML='<div class="alert alert-err">Выберите дату текущего месяца</div>';return;}
+  if(!d||d.getFullYear()!==PLAN_YEAR||d.getMonth()+1!==PLAN_MONTH){msg.innerHTML='<div class="alert alert-err">Выберите дату выбранного месяца</div>';return;}
+  if(!isNextPlan()&&d.getDate()<CUR_DAY){msg.innerHTML='<div class="alert alert-err">Прошедшие поставки менять нельзя</div>';return;}
+  if(LAST_SUPPLY_PLANS.find(p=>p.feed.id===feedId)?.events.some(ev=>ev.index!==index&&ev.day===d.getDate())){
+    msg.innerHTML='<div class="alert alert-err">На этот день уже есть поставка ингредиента</div>';return;
+  }
   msg.innerHTML='<div class="alert alert-info"><span class="spin"></span> Сохранение...</div>';
   try{
     await sbUpsert('supply_plan_overrides',{
-      site:curSite,year:CUR_YEAR,month:CUR_MONTH,feed_id:feedId,plan_index:index,
+      site:curSite,year:PLAN_YEAR,month:PLAN_MONTH,feed_id:feedId,plan_index:index,
       delivery_day:d.getDate(),quantity:qty,is_manual:true,created_by_tg_id:TG_ID,created_by_name:ME.name||TG_NAME,updated_at:new Date().toISOString()
     },'site,year,month,feed_id,plan_index');
-    await sbDelete('supply_plan_overrides',`site=eq.${curSite}&year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&feed_id=eq.${feedId}&plan_index=gt.${index}&is_manual=eq.false`);
     await loadSupplyPlanRows();
-    await persistCalculatedPlans([feedId]);
+    await syncSupplyPlan([feedId]);
     closeModal(); renderPlan(); toast('План пересчитан');
   }catch(e){msg.innerHTML=`<div class="alert alert-err">${e.message}</div>`;}
 }
 
 async function resetPlanOverride(feedId,index){
+  if(!ME||ME.role!=='admin')return;
+  const event=LAST_SUPPLY_PLANS.find(p=>p.feed.id===feedId)?.events.find(e=>e.index===index);
+  if(!event||!isNextPlan()&&event.day<CUR_DAY){toast('Прошедшую поставку менять нельзя');return;}
   try{
-    await sbDelete('supply_plan_overrides',`site=eq.${curSite}&year=eq.${CUR_YEAR}&month=eq.${CUR_MONTH}&feed_id=eq.${feedId}`);
+    await sbDelete('supply_plan_overrides',`site=eq.${curSite}&year=eq.${PLAN_YEAR}&month=eq.${PLAN_MONTH}&feed_id=eq.${feedId}&plan_index=eq.${index}`);
     await loadSupplyPlanRows();
-    await persistCalculatedPlans([feedId]);
+    await syncSupplyPlan([feedId]);
     closeModal(); renderPlan(); toast('Автоматический расчёт восстановлен');
   }catch(e){toast('Ошибка: '+e.message);}
 }
@@ -2149,6 +2304,11 @@ async function saveOB(){
     YEAR_OPEN_BAL = await sbGet('opening_balances',`year=eq.${CUR_YEAR}&site=eq.${curSite}`);
     localStorage.setItem('year_open_bal',JSON.stringify(YEAR_OPEN_BAL));
     rows.forEach(r=>{const el=document.getElementById('ob_'+r.feed_id); if(el) el.dataset.original=String(r.opening_balance);});
+    if(OB_YEAR===CUR_YEAR&&OB_MONTH===CUR_MONTH){
+      await syncSupplyPlan(undefined,CUR_YEAR,CUR_MONTH);
+      if(isNextPlan())await syncSupplyPlan(undefined,PLAN_YEAR,PLAN_MONTH);
+      renderPlan();
+    }
     toast('✅ Остатки сохранены');
     const m=document.getElementById('ob-msg');
     if(m){m.innerHTML=`<div class="alert alert-ok" style="margin-top:8px">✅ Сохранено</div>`;setTimeout(()=>m.innerHTML='',2000);}
@@ -2170,6 +2330,10 @@ async function saveOneOB(feedId){
     YEAR_OPEN_BAL = await sbGet('opening_balances',`year=eq.${CUR_YEAR}&site=eq.${curSite}`);
     localStorage.setItem('year_open_bal',JSON.stringify(YEAR_OPEN_BAL));
     el.dataset.original=String(val);
+    if(OB_YEAR===CUR_YEAR&&OB_MONTH===CUR_MONTH){
+      await syncSupplyPlan([feedId],CUR_YEAR,CUR_MONTH);
+      if(isNextPlan())await syncSupplyPlan([feedId],PLAN_YEAR,PLAN_MONTH);
+    }
     toast('✅ Остаток сохранён');
     render();
   }catch(e){toast('❌ '+e.message);}
@@ -2184,6 +2348,9 @@ async function saveMN(){
       else MONTHLY_NEEDS.push({feed_id:f.id,site:curSite,year:CUR_YEAR,month:CUR_MONTH,per_month_t:val});
     }
     localStorage.setItem('monthly_needs',JSON.stringify(MONTHLY_NEEDS));
+    await syncSupplyPlan(undefined,CUR_YEAR,CUR_MONTH);
+    if(isNextPlan())await syncSupplyPlan(undefined,PLAN_YEAR,PLAN_MONTH);
+    renderPlan();
     toast('✅ Потребности сохранены');
     const m=document.getElementById('mn-msg');
     if(m){m.innerHTML=`<div class="alert alert-ok" style="margin-top:8px">✅ Сохранено</div>`;setTimeout(()=>m.innerHTML='',2000);}
