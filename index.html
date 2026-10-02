@@ -1834,6 +1834,7 @@ function renderPlan(){
         ${ME&&ME.role==='admin'?`<div class="plan-segment" style="margin-bottom:10px"><button class="${PLAN_VIEW==='deliveries'?'on':''}" onclick="setPlanView('deliveries')">Поставки</button><button class="${PLAN_VIEW==='orders'?'on':''}" onclick="setPlanView('orders')">Заявки</button></div>`:''}
         ${next&&!NEXT_PLAN_NEEDS.length?'<div class="alert alert-warn">Потребность на этот месяц ещё не задана. План предварительный, рассчитан по потребности текущего месяца.</div>':''}
         ${next&&ME&&ME.role==='admin'?'<button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:10px" onclick="showNextPlanNeeds()">Потребность на месяц</button>':''}
+        ${PLAN_VIEW==='deliveries'&&ME&&ME.role==='admin'?'<button class="btn btn-gold btn-sm" style="width:100%;margin-bottom:10px" onclick="showPlanAdd()">+ Добавить поставку</button>':''}
         ${PLAN_VIEW==='orders'&&ME&&ME.role==='admin'?`
           <div class="alert alert-info">Расчётная дата заявки: за 5 рабочих дней до поставки.</div>
           <div class="plan-calendar"><table><thead><tr><th class="plan-feed-col">Ингредиент</th><th>Заявка</th><th>Поставка</th><th>Тонн</th></tr></thead><tbody>${orderRows.map(x=>`<tr><td class="plan-feed-col">${feedIco(x.feed.name)} ${x.feed.name}</td><td>${shortDate(x.date)}</td><td>${planDate(x.ev.day)}</td><td>${fmt(x.ev.qty)}</td></tr>`).join('')}</tbody></table></div>
@@ -1903,9 +1904,56 @@ function showPlanEdit(feedId,index,day,qty){
     <div class="alert alert-info">Одна поставка — ${SUPPLY_BATCH_T} т. После переноса следующие даты пересчитаются.</div>
     <div id="plan-msg"></div>
     <button class="btn btn-gold" onclick="savePlanOverride('${feedId}',${index})" style="margin-bottom:8px">Сохранить и пересчитать</button>
-    <button class="btn btn-danger" onclick="resetPlanOverride('${feedId}',${index})" style="margin-bottom:8px">Вернуть автоматический расчёт</button>
+    <button class="btn btn-danger" onclick="resetPlanOverride('${feedId}',${index})" style="margin-bottom:8px">Удалить из плана и пересчитать</button>
     <button class="btn btn-ghost" onclick="closeModal()">Отмена</button>`;
   document.getElementById('modal-bg').classList.add('show');
+}
+
+function showPlanAdd(){
+  if(!ME||ME.role!=='admin'||isNextPlan()&&!NEXT_PLAN_LOADED)return;
+  const feeds=planFeeds();
+  if(!feeds.length){toast('Нет ингредиентов с потребностью');return;}
+  const month=String(PLAN_MONTH).padStart(2,'0');
+  const firstDay=isNextPlan()?1:CUR_DAY;
+  const dateValue=`${PLAN_YEAR}-${month}-${String(firstDay).padStart(2,'0')}`;
+  document.getElementById('modal-content').innerHTML=`
+    <div class="modal-title">Добавить поставку</div>
+    <div class="form-group"><label>Ингредиент</label><select id="plan-add-feed">${feeds.map(f=>`<option value="${f.id}">${f.name}</option>`).join('')}</select></div>
+    <div class="form-group"><label>Дата поставки</label><input type="date" id="plan-add-date" value="${dateValue}" min="${dateValue}" max="${PLAN_YEAR}-${month}-${String(planDays()).padStart(2,'0')}"></div>
+    <div class="alert alert-info">Поставка — ${SUPPLY_BATCH_T} т. Будущие даты пересчитаются.</div>
+    <div id="plan-add-msg"></div>
+    <button class="btn btn-gold" onclick="savePlanAdd()" style="margin-bottom:8px">Сохранить и пересчитать</button>
+    <button class="btn btn-ghost" onclick="closeModal()">Отмена</button>`;
+  document.getElementById('modal-bg').classList.add('show');
+}
+
+async function savePlanAdd(){
+  if(!ME||ME.role!=='admin')return;
+  const msg=document.getElementById('plan-add-msg');
+  const feedId=document.getElementById('plan-add-feed').value;
+  const d=parseDateInput(document.getElementById('plan-add-date').value);
+  if(!planFeeds().some(f=>f.id===feedId)){msg.innerHTML='<div class="alert alert-err">Выберите ингредиент</div>';return;}
+  if(!d||d.getFullYear()!==PLAN_YEAR||d.getMonth()+1!==PLAN_MONTH){msg.innerHTML='<div class="alert alert-err">Выберите дату выбранного месяца</div>';return;}
+  if(!isNextPlan()&&d.getDate()<CUR_DAY){msg.innerHTML='<div class="alert alert-err">Прошедшую дату выбрать нельзя</div>';return;}
+  msg.innerHTML='<div class="alert alert-info"><span class="spin"></span> Сохранение...</div>';
+  try{
+    await loadSupplyPlanRows();
+    const feed=FEEDS.find(f=>f.id===feedId);
+    const plan=calculateFeedPlan(feed,PLAN_YEAR,PLAN_MONTH);
+    if(plan.events.some(ev=>ev.day===d.getDate())){
+      msg.innerHTML='<div class="alert alert-err">На этот день уже есть поставка ингредиента</div>';return;
+    }
+    const indexes=planOverrides().filter(x=>x.feed_id===feedId).map(x=>Number(x.plan_index));
+    const index=Math.max(0,...indexes,...plan.events.map(ev=>ev.index))+1;
+    await sbUpsert('supply_plan_overrides',{
+      site:curSite,year:PLAN_YEAR,month:PLAN_MONTH,feed_id:feedId,plan_index:index,
+      delivery_day:d.getDate(),quantity:SUPPLY_BATCH_T,is_manual:true,
+      created_by_tg_id:TG_ID,created_by_name:ME.name||TG_NAME,updated_at:new Date().toISOString()
+    },'site,year,month,feed_id,plan_index');
+    await loadSupplyPlanRows();
+    await syncSupplyPlan([feedId]);
+    closeModal();renderPlan();toast('Поставка добавлена, план пересчитан');
+  }catch(e){msg.innerHTML=`<div class="alert alert-err">${e.message}</div>`;}
 }
 
 function showNextPlanNeeds(){
@@ -1973,7 +2021,7 @@ async function resetPlanOverride(feedId,index){
     await sbDelete('supply_plan_overrides',`site=eq.${curSite}&year=eq.${PLAN_YEAR}&month=eq.${PLAN_MONTH}&feed_id=eq.${feedId}&plan_index=eq.${index}`);
     await loadSupplyPlanRows();
     await syncSupplyPlan([feedId]);
-    closeModal(); renderPlan(); toast('Автоматический расчёт восстановлен');
+    closeModal(); renderPlan(); toast('План пересчитан');
   }catch(e){toast('Ошибка: '+e.message);}
 }
 
